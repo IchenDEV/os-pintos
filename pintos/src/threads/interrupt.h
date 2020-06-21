@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 /* Interrupts on or off? */
-enum intr_level 
+enum intr_level
   {
     INTR_OFF,             /* Interrupts disabled. */
     INTR_ON               /* Interrupts enabled. */
