@@ -5,8 +5,4 @@
 #include "tests/lib.h"
 #include "tests/main.h"
 
-void
-test_main (void)
-{
-  wait (exec (copy_string_across_boundary("child-args arg1 arg2")));
-}
+void test_main(void) { wait(exec(copy_string_across_boundary("child-args arg1 arg2"))); }

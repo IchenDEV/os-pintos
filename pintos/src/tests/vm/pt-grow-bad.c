@@ -7,8 +7,4 @@
 #include "tests/lib.h"
 #include "tests/main.h"
 
-void
-test_main (void)
-{
-  asm volatile ("movl -4096(%esp), %eax");
-}
+void test_main(void) { asm volatile("movl -4096(%esp), %eax"); }

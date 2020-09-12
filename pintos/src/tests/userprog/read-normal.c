@@ -4,8 +4,4 @@
 #include "tests/lib.h"
 #include "tests/main.h"
 
-void
-test_main (void)
-{
-  check_file ("sample.txt", sample, sizeof sample - 1);
-}
+void test_main(void) { check_file("sample.txt", sample, sizeof sample - 1); }

@@ -9,24 +9,22 @@
 #include "tests/main.h"
 #include "tests/vm/qsort.h"
 
-const char *test_name = "child-qsort";
+const char* test_name = "child-qsort";
 
-int
-main (int argc UNUSED, char *argv[])
-{
+int main(int argc UNUSED, char* argv[]) {
   int handle;
   unsigned char buf[128 * 1024];
   size_t size;
 
   quiet = true;
 
-  CHECK ((handle = open (argv[1])) > 1, "open \"%s\"", argv[1]);
+  CHECK((handle = open(argv[1])) > 1, "open \"%s\"", argv[1]);
 
-  size = read (handle, buf, sizeof buf);
-  qsort_bytes (buf, sizeof buf);
-  seek (handle, 0);
-  write (handle, buf, size);
-  close (handle);
+  size = read(handle, buf, sizeof buf);
+  qsort_bytes(buf, sizeof buf);
+  seek(handle, 0);
+  write(handle, buf, size);
+  close(handle);
 
   return 72;
 }

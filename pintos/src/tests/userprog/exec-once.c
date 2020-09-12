@@ -4,8 +4,4 @@
 #include "tests/lib.h"
 #include "tests/main.h"
 
-void
-test_main (void)
-{
-  wait (exec ("child-simple"));
-}
+void test_main(void) { wait(exec("child-simple")); }
