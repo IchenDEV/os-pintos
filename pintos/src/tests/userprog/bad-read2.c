@@ -4,10 +4,7 @@
 #include "tests/lib.h"
 #include "tests/main.h"
 
-void
-test_main (void)
-{
-  msg ("Congratulations - you have successfully read kernel memory: %d",
-        *(int *)0xC0000000);
-  fail ("should have exited with -1");
+void test_main(void) {
+  msg("Congratulations - you have successfully read kernel memory: %d", *(int*)0xC0000000);
+  fail("should have exited with -1");
 }
