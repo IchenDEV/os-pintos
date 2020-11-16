@@ -8,7 +8,10 @@ include $(patsubst %,$(SRCDIR)/%/Make.tests,$(TEST_SUBDIRS))
 # does not properly align the stack.
 # See https://stackoverflow.com/questions/40307193/responsibility-of-stack-alignment-in-32-bit-x86-assembly.
 tests/userprog/stack-align.o: tests/userprog/stack-align.c
-	clang -m32 -c $< -o $@ $(CFLAGS) $(CPPFLAGS) $(WARNINGS) $(DEFINES) $(DEPS)
+	clang -m32 -c $< -o $@ $(filter-out -fno-omit-frame-pointer,$(CFLAGS)) $(filter-out -fno-omit-frame-pointer,$(CPPFLAGS)) $(WARNINGS) $(DEFINES) $(DEPS)
+
+tests/userprog/stack-align-0.o: tests/userprog/stack-align-0.c
+	$(CC) -m32 -c $< -o $@ $(filter-out -fno-omit-frame-pointer,$(CFLAGS)) $(filter-out -fno-omit-frame-pointer,$(CPPFLAGS)) $(WARNINGS) $(DEFINES) $(DEPS)
 
 PROGS = $(foreach subdir,$(TEST_SUBDIRS),$($(subdir)_PROGS))
 TESTS = $(foreach subdir,$(TEST_SUBDIRS),$($(subdir)_TESTS))
