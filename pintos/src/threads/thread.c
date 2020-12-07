@@ -251,11 +251,11 @@ tid_t thread_tid(void) { return thread_current()->tid; }
 
 /* Deschedules the current thread and destroys it.  Never
    returns to the caller. */
-void thread_exit(void) {
+void thread_exit(int status) {
   ASSERT(!intr_context());
 
 #ifdef USERPROG
-  process_exit();
+  process_exit(status);
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -364,9 +364,9 @@ static void idle(void* idle_started_ UNUSED) {
 static void kernel_thread(thread_func* function, void* aux) {
   ASSERT(function != NULL);
 
-  intr_enable(); /* The scheduler runs with interrupts off. */
-  function(aux); /* Execute the thread function. */
-  thread_exit(); /* If function() returns, kill the thread. */
+  intr_enable();  /* The scheduler runs with interrupts off. */
+  function(aux);  /* Execute the thread function. */
+  thread_exit(0); /* If function() returns, kill the thread. */
 }
 
 /* Returns the running thread. */
@@ -507,3 +507,20 @@ static tid_t allocate_tid(void) {
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof(struct thread, stack);
+
+struct thread* thread_get(tid_t tid) {
+  struct list_elem* e;
+  struct thread* dest_thread = NULL;
+  enum intr_level old_level;
+
+  old_level = intr_disable();
+  for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)) {
+    struct thread* t = list_entry(e, struct thread, allelem);
+    if (tid == t->tid) {
+      dest_thread = t;
+      break;
+    }
+  }
+  intr_set_level(old_level);
+  return dest_thread;
+}

@@ -19,6 +19,9 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+static void extract_command_name(char* cmd_string, char* command_name);
+static void extract_command_args(char* cmd_string, char* argv[], int* argc);
+
 static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load(const char* cmdline, void (**eip)(void), void** esp);
@@ -39,17 +42,33 @@ tid_t process_execute(const char* file_name) {
     return TID_ERROR;
   strlcpy(fn_copy, file_name, PGSIZE);
 
+  // make another copy of file name, which will be saved as a property in the process structure
+  char* cmd_name = malloc(strlen(fn_copy) + 1);
+  if (cmd_name == NULL)
+    return TID_ERROR;
+
+  extract_command_name(fn_copy, cmd_name);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create(file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
+  tid = thread_create(cmd_name, PRI_DEFAULT, start_process, fn_copy);
+  if (tid == TID_ERROR) {
     palloc_free_page(fn_copy);
+    free(cmd_name);
+    return -1;
+  }
+
+  struct thread* t = thread_get(tid);
+  t->next_fd = 2;
+  //t->prog_name = cmd_name;
+  list_init(&t->desc_table);
+
   return tid;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
 static void start_process(void* file_name_) {
-  char* file_name = file_name_;
+  char* cmd_line = file_name_;
   struct intr_frame if_;
   bool success;
 
@@ -58,12 +77,12 @@ static void start_process(void* file_name_) {
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load(file_name, &if_.eip, &if_.esp);
+  success = load(cmd_line, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  palloc_free_page(file_name);
+  palloc_free_page(cmd_line);
   if (!success)
-    thread_exit();
+    thread_exit(-1);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -90,8 +109,14 @@ int process_wait(tid_t child_tid UNUSED) {
 }
 
 /* Free the current process's resources. */
-void process_exit(void) {
+void process_exit(int status) {
   struct thread* cur = thread_current();
+
+  if (thread_tid() == 1) {
+    return;
+  }
+
+  //printf("%s: exit(%d)\n", status);
   uint32_t* pd;
 
   /* Destroy the current process's page directory and switch back
@@ -187,7 +212,7 @@ struct Elf32_Phdr {
 #define PF_W 2 /* Writable. */
 #define PF_R 4 /* Readable. */
 
-static bool setup_stack(void** esp);
+static bool setup_stack(void** esp, char** argv, int argc);
 static bool validate_segment(const struct Elf32_Phdr*, struct file*);
 static bool load_segment(struct file* file, off_t ofs, uint8_t* upage, uint32_t read_bytes,
                          uint32_t zero_bytes, bool writable);
@@ -210,10 +235,16 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     goto done;
   process_activate();
 
+  char* fn_cp = malloc(strlen(file_name) + 1);
+  strlcpy(fn_cp, file_name, strlen(file_name) + 1);
+
+  char *process_name, save_ptr;
+  process_name = strtok_r(fn_cp, " ", &save_ptr);
+
   /* Open executable file. */
-  file = filesys_open(file_name);
+  file = filesys_open(process_name);
   if (file == NULL) {
-    printf("load: %s: open failed\n", file_name);
+    printf("load: %s: open failed\n", process_name);
     goto done;
   }
 
@@ -258,12 +289,12 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
           uint32_t read_bytes, zero_bytes;
           if (phdr.p_filesz > 0) {
             /* Normal segment.
-                     Read initial part from disk and zero the rest. */
+                   Read initial part from disk and zero the rest. */
             read_bytes = page_offset + phdr.p_filesz;
             zero_bytes = (ROUND_UP(page_offset + phdr.p_memsz, PGSIZE) - read_bytes);
           } else {
             /* Entirely zero.
-                     Don't read anything from disk. */
+                   Don't read anything from disk. */
             read_bytes = 0;
             zero_bytes = ROUND_UP(page_offset + phdr.p_memsz, PGSIZE);
           }
@@ -275,8 +306,17 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     }
   }
 
+  /*
+    extract command line
+   */
+  // create a copy of file_name and operate on it (modifying it)
+  char file_name_copy[CMD_LENGTH_MAX];
+  strlcpy(file_name_copy, file_name, CMD_LENGTH_MAX);
+  char* argv[CMD_ARGS_MAX];
+  int argc = 1;
+  extract_command_args(file_name_copy, argv, &argc);
   /* Set up stack. */
-  if (!setup_stack(esp))
+  if (!setup_stack(esp, argv, argc))
     goto done;
 
   /* Start address. */
@@ -393,7 +433,7 @@ static bool load_segment(struct file* file, off_t ofs, uint8_t* upage, uint32_t 
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
-static bool setup_stack(void** esp) {
+static bool setup_stack(void** esp, char** argv, int argc) {
   uint8_t* kpage;
   bool success = false;
 
@@ -405,6 +445,44 @@ static bool setup_stack(void** esp) {
     else
       palloc_free_page(kpage);
   }
+
+  if (success) {
+
+    char** address[32];
+
+    int n = argc - 1;
+    while (n >= 0) {
+      *esp = *esp - strlen(argv[n]) - 1;
+      strlcpy(*esp, argv[n], strlen(argv[n]) + 1);
+      address[n] = *(char**)esp;
+      n--;
+    }
+
+    while ((int)(*esp - (argc + 3) * 4) % 16) {
+      *esp = *esp - 1;
+    }
+
+    argv[argc] = 0;
+    *esp = *esp - 4;
+    memcpy(*esp, &argv[argc], sizeof(char*));
+
+    int t = argc - 1;
+    while (t >= 0) {
+      *esp = *esp - 4;
+      memcpy(*esp, &address[t], sizeof(char**));
+      t--;
+    }
+
+    void* argv0 = *esp;
+    *esp = *esp - 4;
+    memcpy(*esp, &argv0, sizeof(char**));
+
+    *esp = *esp - 4;
+    memcpy(*esp, &argc, sizeof(int));
+
+    *esp = *esp - 4;
+  }
+
   return success;
 }
 
@@ -424,4 +502,99 @@ static bool install_page(void* upage, void* kpage, bool writable) {
      address, then map our page there. */
   return (pagedir_get_page(t->pagedir, upage) == NULL &&
           pagedir_set_page(t->pagedir, upage, kpage, writable));
+}
+
+static void extract_command_name(char* cmd_string, char* command_name) {
+  char* save_ptr;
+  strlcpy(command_name, cmd_string, PGSIZE);
+  command_name = strtok_r(command_name, " ", &save_ptr);
+}
+
+static void extract_command_args(char* cmd_string, char* argv[], int* argc) {
+  char* save_ptr;
+  argv[0] = strtok_r(cmd_string, " ", &save_ptr);
+  char* token;
+  *argc = 1;
+  while ((token = strtok_r(NULL, " ", &save_ptr)) != NULL) {
+    argv[(*argc)++] = token;
+  }
+}
+
+struct fd_entry {
+  int fd;
+  struct file* file;
+  struct list_elem elem;
+};
+
+static struct fd_entry* get_fd_entry(int fd) {
+  struct list_elem* e;
+  struct fd_entry* fe = NULL;
+  struct list* fd_table = &thread_current()->desc_table;
+
+  for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
+    struct fd_entry* tmp = list_entry(e, struct fd_entry, elem);
+    if (tmp->fd == fd) {
+      fe = tmp;
+      break;
+    }
+  }
+
+  return fe;
+}
+
+int process_write(int fd, const void* buffer, unsigned size) {
+  if (fd == STDOUT_FILENO) {
+    putbuf((char*)buffer, (size_t)size);
+    return (int)size;
+  } else if (get_fd_entry(fd) != NULL) {
+    return (int)file_write(get_fd_entry(fd)->file, buffer, size);
+  }
+  return -1;
+}
+int process_tell(int fd) {
+  if (get_fd_entry(fd) != NULL) {
+    struct fd_entry* fd_entry = get_fd_entry(fd);
+    return file_tell(fd_entry->file);
+  }
+  return -1;
+}
+void process_seek(int fd, unsigned position) {
+  if (get_fd_entry(fd) != NULL) {
+    struct fd_entry* fd_entry = get_fd_entry(fd);
+    file_seek(fd_entry->file, position);
+  }
+}
+
+int process_read(int fd, void* buffer, unsigned length) {
+  if (get_fd_entry(fd) != NULL) {
+    struct fd_entry* fd_entry = get_fd_entry(fd);
+    return file_read(fd_entry->file, buffer, length);
+  }
+  return -1;
+}
+// File descriptor manager
+
+static int allocate_fd(void) { return thread_current()->next_fd++; }
+
+int process_open(const char* file_name) {
+  struct file* f = filesys_open(file_name);
+  if (f == NULL)
+    return -1;
+  struct fd_entry* fd_entry = malloc(sizeof(struct fd_entry));
+  if (fd_entry == NULL)
+    return -1;
+  fd_entry->fd = allocate_fd();
+  fd_entry->file = f;
+  list_push_back(&thread_current()->desc_table, &fd_entry->elem);
+
+  return fd_entry->fd;
+}
+
+void process_close(int fd) {
+  if (get_fd_entry(fd) != NULL) {
+    struct fd_entry* fd_entry = get_fd_entry(fd);
+    file_close(fd_entry->file);
+    list_remove(&fd_entry->elem);
+    free(fd_entry);
+  }
 }

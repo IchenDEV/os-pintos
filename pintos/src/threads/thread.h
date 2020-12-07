@@ -76,11 +76,11 @@ typedef int tid_t;
    set to THREAD_MAGIC.  Stack overflow will normally change this
    value, triggering the assertion. */
 /* The `elem' member has a dual purpose.  It can be an element in
-   the run queue (thread.c), or it can be an element in a
-   semaphore wait list (synch.c).  It can be used these two ways
-   only because they are mutually exclusive: only a thread in the
-   ready state is on the run queue, whereas only a thread in the
-   blocked state is on a semaphore wait list. */
+      the run queue (thread.c), or it can be an element in a
+      semaphore wait list (synch.c).  It can be used these two ways
+      only because they are mutually exclusive: only a thread in the
+      ready state is on the run queue, whereas only a thread in the
+      blocked state is on a semaphore wait list. */
 struct thread {
   /* Owned by thread.c. */
   tid_t tid;                 /* Thread identifier. */
@@ -96,6 +96,8 @@ struct thread {
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
   uint32_t* pagedir; /* Page directory. */
+  struct list desc_table;
+  int next_fd;
 #endif
 
   /* Owned by thread.c. */
@@ -106,7 +108,7 @@ struct thread {
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
-
+struct thread* thread_get(tid_t tid);
 void thread_init(void);
 void thread_start(void);
 
@@ -123,7 +125,7 @@ struct thread* thread_current(void);
 tid_t thread_tid(void);
 const char* thread_name(void);
 
-void thread_exit(void) NO_RETURN;
+void thread_exit(int status) NO_RETURN;
 void thread_yield(void);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
