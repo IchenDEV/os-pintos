@@ -20,9 +20,9 @@ static int get_user(const uint8_t* uaddr) {
   if (!is_user_vaddr(uaddr))
     return -1;
 
-  if (pagedir_get_page(thread_current()->pagedir, uaddr) == NULL) {
+  if (pagedir_get_page(thread_current()->pagedir, uaddr) == NULL)
     return -1;
-  }
+
   int result;
   asm("movl $1f, %0; movzbl %1, %0; 1:" : "=&a"(result) : "m"(*uaddr));
   return result;
@@ -36,14 +36,19 @@ static bool is_valid_string(void* str) {
   else
     return false;
 }
+
 static bool syscall_create(const char* file_name, unsigned initial_size) {
   return filesys_create(file_name, initial_size);
 }
+static bool syscall_remove(const char* file_name) { return filesys_remove(file_name); }
+
 static void kill_program(void) {
   printf("%s: exit(%d)\n", &thread_current()->name, -1);
   thread_exit(-1);
 }
-static void syscall_halt(void) { shutdown(); }
+static pid_t syscall_exec(const char* file_name) { return process_execute(file_name); }
+
+static void syscall_halt(void) { shutdown_power_off(); }
 static int syscall_wait(pid_t pid) {
   //return process_wait(pid);
   return 1;
@@ -134,8 +139,9 @@ static int syscall_read_wrapper(struct intr_frame* f) {
   int fd = *(int*)(f->esp + 4);
   void* buffer = *(char**)(f->esp + 8);
   unsigned size = *(unsigned*)(f->esp + 12);
-  if (!is_valid_pointer(buffer, 1) || !is_valid_pointer(buffer + size, 1))
-    return -1;
+
+  // if (!is_valid_pointer(buffer, 1) || !is_valid_pointer(buffer + size, 1))
+  //   return -1;
 
   int written_size = process_read(fd, buffer, size);
   f->eax = written_size;
@@ -199,6 +205,41 @@ static int syscall_create_wrapper(struct intr_frame* f) {
   f->eax = syscall_create(str, size);
   return 0;
 }
+static int syscall_remove_wrapper(struct intr_frame* f) {
+  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4)))
+    return -1;
+
+  char* str = *(char**)(f->esp + 4);
+  f->eax = syscall_remove(str);
+  return 0;
+}
+static int syscall_exec_wrapper(struct intr_frame* f) {
+  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4))) {
+    return -1;
+  }
+  char* str = *(char**)(f->esp + 4);
+  // make sure the command string can fit into a page
+  if (strlen(str) >= PGSIZE) {
+    printf("very large strings(>PGSIZE) are not supported\n");
+    return -1;
+  }
+  // non empty string and it does not start with a space(args delimiter)
+  if (strlen(str) == 0 || str[0] == ' ') {
+    printf("the command string should be non-empty and doesn't start with a space %s\n", str);
+    return -1;
+  }
+  f->eax = syscall_exec(str);
+  return 0;
+}
+
+static int syscall_filesize_wrapper(struct intr_frame* f) {
+  if (!is_valid_pointer(f->esp + 4, 4)) {
+    return -1;
+  }
+  int fd = *(int*)(f->esp + 4);
+  f->eax = process_filesize(fd);
+  return 0;
+}
 
 void syscall_init(void) {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
@@ -208,9 +249,12 @@ void syscall_init(void) {
   syscall_handlers[SYS_WAIT] = &syscall_wait_wrapper;
   syscall_handlers[SYS_EXIT] = &syscall_exit_wrapper;
   syscall_handlers[SYS_CREATE] = &syscall_create_wrapper;
+  syscall_handlers[SYS_REMOVE] = &syscall_remove_wrapper;
   syscall_handlers[SYS_CLOSE] = &syscall_close_wrapper;
   syscall_handlers[SYS_PRACTICE] = &syscall_practice_wrapper;
   syscall_handlers[SYS_SEEK] = &syscall_seek_wrapper;
   syscall_handlers[SYS_TELL] = &syscall_tell_wrapper;
+  syscall_handlers[SYS_FILESIZE] = &syscall_filesize_wrapper;
   syscall_handlers[SYS_OPEN] = &syscall_open_wrapper;
+  //syscall_handlers[SYS_EXEC] = &syscall_exec_wrapper;
 }

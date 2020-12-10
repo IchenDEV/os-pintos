@@ -34,7 +34,6 @@ tid_t process_execute(const char* file_name) {
   char* fn_copy;
   tid_t tid;
 
-  sema_init(&temporary, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page(0);
@@ -49,6 +48,7 @@ tid_t process_execute(const char* file_name) {
 
   extract_command_name(fn_copy, cmd_name);
 
+  sema_init(&temporary, 0);
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(cmd_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR) {
@@ -58,9 +58,12 @@ tid_t process_execute(const char* file_name) {
   }
 
   struct thread* t = thread_get(tid);
+
   t->next_fd = 2;
-  //t->prog_name = cmd_name;
+  t->prog_name = cmd_name;
   list_init(&t->desc_table);
+
+  // sema_down(&temporary);
 
   return tid;
 }
@@ -289,12 +292,12 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
           uint32_t read_bytes, zero_bytes;
           if (phdr.p_filesz > 0) {
             /* Normal segment.
-                   Read initial part from disk and zero the rest. */
+                 Read initial part from disk and zero the rest. */
             read_bytes = page_offset + phdr.p_filesz;
             zero_bytes = (ROUND_UP(page_offset + phdr.p_memsz, PGSIZE) - read_bytes);
           } else {
             /* Entirely zero.
-                   Don't read anything from disk. */
+                 Don't read anything from disk. */
             read_bytes = 0;
             zero_bytes = ROUND_UP(page_offset + phdr.p_memsz, PGSIZE);
           }
@@ -454,13 +457,11 @@ static bool setup_stack(void** esp, char** argv, int argc) {
     while (n >= 0) {
       *esp = *esp - strlen(argv[n]) - 1;
       strlcpy(*esp, argv[n], strlen(argv[n]) + 1);
-      address[n] = *(char**)esp;
-      n--;
+      address[n--] = *(char**)esp;
     }
 
-    while ((int)(*esp - (argc + 3) * 4) % 16) {
+    while ((int)(*esp - (argc + 3) * 4) % 16)
       *esp = *esp - 1;
-    }
 
     argv[argc] = 0;
     *esp = *esp - 4;
@@ -469,8 +470,7 @@ static bool setup_stack(void** esp, char** argv, int argc) {
     int t = argc - 1;
     while (t >= 0) {
       *esp = *esp - 4;
-      memcpy(*esp, &address[t], sizeof(char**));
-      t--;
+      memcpy(*esp, &address[t--], sizeof(char**));
     }
 
     void* argv0 = *esp;
@@ -515,9 +515,8 @@ static void extract_command_args(char* cmd_string, char* argv[], int* argc) {
   argv[0] = strtok_r(cmd_string, " ", &save_ptr);
   char* token;
   *argc = 1;
-  while ((token = strtok_r(NULL, " ", &save_ptr)) != NULL) {
+  while ((token = strtok_r(NULL, " ", &save_ptr)) != NULL)
     argv[(*argc)++] = token;
-  }
 }
 
 struct fd_entry {
@@ -533,13 +532,11 @@ static struct fd_entry* get_fd_entry(int fd) {
 
   for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
     struct fd_entry* tmp = list_entry(e, struct fd_entry, elem);
-    if (tmp->fd == fd) {
-      fe = tmp;
-      break;
-    }
+    if (tmp->fd == fd)
+      return tmp;
   }
 
-  return fe;
+  return NULL;
 }
 
 int process_write(int fd, const void* buffer, unsigned size) {
@@ -547,28 +544,18 @@ int process_write(int fd, const void* buffer, unsigned size) {
     putbuf((char*)buffer, (size_t)size);
     return (int)size;
   } else if (get_fd_entry(fd) != NULL) {
-    return (int)file_write(get_fd_entry(fd)->file, buffer, size);
+    return file_write(get_fd_entry(fd)->file, buffer, size);
   }
   return -1;
-}
-int process_tell(int fd) {
-  if (get_fd_entry(fd) != NULL) {
-    struct fd_entry* fd_entry = get_fd_entry(fd);
-    return file_tell(fd_entry->file);
-  }
-  return -1;
-}
-void process_seek(int fd, unsigned position) {
-  if (get_fd_entry(fd) != NULL) {
-    struct fd_entry* fd_entry = get_fd_entry(fd);
-    file_seek(fd_entry->file, position);
-  }
 }
 
-int process_read(int fd, void* buffer, unsigned length) {
-  if (get_fd_entry(fd) != NULL) {
-    struct fd_entry* fd_entry = get_fd_entry(fd);
-    return file_read(fd_entry->file, buffer, length);
+int process_read(int fd, void* buffer, unsigned size) {
+  if (fd == STDIN_FILENO) {
+    //getbuf((char*)buffer, (size_t)size);
+    return (int)size;
+  } else if (get_fd_entry(fd) != NULL) {
+    file_read(get_fd_entry(fd)->file, buffer, size);
+    return (int)size;
   }
   return -1;
 }
@@ -590,9 +577,29 @@ int process_open(const char* file_name) {
   return fd_entry->fd;
 }
 
+int process_filesize(int fd) {
+  struct fd_entry* fd_entry = get_fd_entry(fd);
+  if (fd_entry != NULL)
+    return file_length(fd_entry->file);
+  return -1;
+}
+
+int process_tell(int fd) {
+  struct fd_entry* fd_entry = get_fd_entry(fd);
+  if (fd_entry != NULL)
+    return file_tell(fd_entry->file);
+  return -1;
+}
+
+void process_seek(int fd, unsigned position) {
+  struct fd_entry* fd_entry = get_fd_entry(fd);
+  if (fd_entry != NULL)
+    file_seek(fd_entry->file, position);
+}
+
 void process_close(int fd) {
-  if (get_fd_entry(fd) != NULL) {
-    struct fd_entry* fd_entry = get_fd_entry(fd);
+  struct fd_entry* fd_entry = get_fd_entry(fd);
+  if (fd_entry != NULL) {
     file_close(fd_entry->file);
     list_remove(&fd_entry->elem);
     free(fd_entry);

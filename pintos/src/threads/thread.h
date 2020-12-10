@@ -95,9 +95,13 @@ struct thread {
 
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
+  char* prog_name;
   uint32_t* pagedir; /* Page directory. */
+  struct list children;
   struct list desc_table;
+  tid_t parent_tid;
   int next_fd;
+  struct file* executable;
 #endif
 
   /* Owned by thread.c. */
@@ -108,7 +112,7 @@ struct thread {
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
-struct thread* thread_get(tid_t tid);
+
 void thread_init(void);
 void thread_start(void);
 
@@ -139,5 +143,11 @@ int thread_get_nice(void);
 void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
+
+#ifdef USERPROG
+/* Owned by userprog/process.c. */
+struct thread* thread_get(tid_t tid);
+bool thread_is_parent_of(tid_t tid);
+#endif
 
 #endif /* threads/thread.h */
