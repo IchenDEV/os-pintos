@@ -21,7 +21,7 @@
 #define THREAD_MAGIC 0xcd6abf4b
 
 /* List of processes in THREAD_READY state, that is, processes
-   that are ready to run but not actually running. */
+      that are ready to run but not actually running. */
 static struct list ready_list;
 
 /* List of all processes.  Processes are added to this list
@@ -171,6 +171,14 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   init_thread(t, name, priority);
   tid = t->tid = allocate_tid();
 
+  //初始化孩子元素
+  t->pointer_as_child_thread = malloc(sizeof(struct as_child_thread));
+  t->pointer_as_child_thread->tid = tid;
+  t->pointer_as_child_thread->exit_status = UINT32_MAX;
+  t->pointer_as_child_thread->bewaited = false;
+  sema_init(&t->pointer_as_child_thread->sema, 0);
+  list_push_back(&thread_current()->children, &t->pointer_as_child_thread->child_thread_elem);
+
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame(t, sizeof *kf);
   kf->eip = NULL;
@@ -262,6 +270,24 @@ void thread_exit(int status) {
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable();
+
+  //信号量加上
+  thread_current()->pointer_as_child_thread->exit_status = thread_current()->exit_status;
+  sema_up(&thread_current()->pointer_as_child_thread->sema);
+
+  // 关闭所有打开的文件
+  struct list_elem* e;
+  struct list* files = &thread_current()->files;
+  while (!list_empty(files)) {
+    e = list_pop_front(files);
+    struct opened_file* f = list_entry(e, struct opened_file, file_elem);
+
+    file_close(f->file);
+
+    list_remove(e);
+    free(f);
+  }
+
   list_remove(&thread_current()->allelem);
   thread_current()->status = THREAD_DYING;
   schedule();
@@ -399,6 +425,13 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->stack = (uint8_t*)t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+  list_init(&t->children);
+
+  if (t == initial_thread)
+    t->parent = NULL;
+  else
+    t->parent = thread_current();
 
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);

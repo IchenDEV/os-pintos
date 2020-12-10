@@ -49,10 +49,8 @@ static void kill_program(void) {
 static pid_t syscall_exec(const char* file_name) { return process_execute(file_name); }
 
 static void syscall_halt(void) { shutdown_power_off(); }
-static int syscall_wait(pid_t pid) {
-  //return process_wait(pid);
-  return 1;
-}
+
+static pid_t syscall_wait(pid_t pid) { return process_wait(pid); }
 
 static bool is_valid_pointer(void* esp, uint8_t argc) {
   uint8_t i = 0;
@@ -140,11 +138,11 @@ static int syscall_read_wrapper(struct intr_frame* f) {
   void* buffer = *(char**)(f->esp + 8);
   unsigned size = *(unsigned*)(f->esp + 12);
 
-  // if (!is_valid_pointer(buffer, 1) || !is_valid_pointer(buffer + size, 1))
-  //   return -1;
+  if (!is_valid_pointer(buffer, 1) || !is_valid_pointer(buffer + size, 1))
+    return -1;
 
   int written_size = process_read(fd, buffer, size);
-  f->eax = written_size;
+  f->eax = size;
   return 0;
 }
 
@@ -256,5 +254,5 @@ void syscall_init(void) {
   syscall_handlers[SYS_TELL] = &syscall_tell_wrapper;
   syscall_handlers[SYS_FILESIZE] = &syscall_filesize_wrapper;
   syscall_handlers[SYS_OPEN] = &syscall_open_wrapper;
-  //syscall_handlers[SYS_EXEC] = &syscall_exec_wrapper;
+  syscall_handlers[SYS_EXEC] = &syscall_exec_wrapper;
 }

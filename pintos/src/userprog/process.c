@@ -22,7 +22,6 @@
 static void extract_command_name(char* cmd_string, char* command_name);
 static void extract_command_args(char* cmd_string, char* argv[], int* argc);
 
-static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load(const char* cmdline, void (**eip)(void), void** esp);
 
@@ -48,22 +47,34 @@ tid_t process_execute(const char* file_name) {
 
   extract_command_name(fn_copy, cmd_name);
 
-  sema_init(&temporary, 0);
   /* Create a new thread to execute FILE_NAME. */
+  struct file* f = filesys_open(cmd_name); //检查是否存在
+  if (f == NULL) {
+    palloc_free_page(fn_copy);
+    free(cmd_name);
+    return TID_ERROR;
+  }
+
   tid = thread_create(cmd_name, PRI_DEFAULT, start_process, fn_copy);
+
   if (tid == TID_ERROR) {
     palloc_free_page(fn_copy);
     free(cmd_name);
-    return -1;
+    return TID_ERROR;
   }
+
+  //父进程阻塞，等待子进程load完
 
   struct thread* t = thread_get(tid);
 
   t->next_fd = 2;
   t->prog_name = cmd_name;
-  list_init(&t->desc_table);
+  list_init(&t->files);
 
-  // sema_down(&temporary);
+  sema_init(&t->exec_sema, 0);
+  sema_down(&t->exec_sema);
+  if (!t->exec_success)
+    return TID_ERROR;
 
   return tid;
 }
@@ -106,9 +117,33 @@ static void start_process(void* file_name_) {
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait(tid_t child_tid UNUSED) {
-  sema_down(&temporary);
-  return 0;
+int process_wait(tid_t child_tid) {
+  struct list_elem* e;
+  struct list* l = &thread_current()->children;
+  struct as_child_thread* act = NULL;
+
+  //找到pid的孩子
+  for (e = list_begin(l); e != list_end(l); e = list_next(e)) {
+    act = list_entry(e, struct as_child_thread, child_thread_elem);
+    if (act->tid == child_tid) {
+      if (!act->bewaited) {
+        act->bewaited = true;
+        //信号量减
+        sema_down(&act->sema);
+        break;
+      } else
+        return -1;
+    }
+  }
+  if (e == list_end(l))
+    return -1;
+
+  //等到孩子退出后, 读取退出状态， 移走孩子元素并释放
+  int status = act->exit_status;
+  list_remove(e);
+  free(act);
+
+  return status;
 }
 
 /* Free the current process's resources. */
@@ -137,7 +172,7 @@ void process_exit(int status) {
     pagedir_activate(NULL);
     pagedir_destroy(pd);
   }
-  sema_up(&temporary);
+  sema_up(&cur->exec_sema);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -292,12 +327,12 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
           uint32_t read_bytes, zero_bytes;
           if (phdr.p_filesz > 0) {
             /* Normal segment.
-                 Read initial part from disk and zero the rest. */
+               Read initial part from disk and zero the rest. */
             read_bytes = page_offset + phdr.p_filesz;
             zero_bytes = (ROUND_UP(page_offset + phdr.p_memsz, PGSIZE) - read_bytes);
           } else {
             /* Entirely zero.
-                 Don't read anything from disk. */
+               Don't read anything from disk. */
             read_bytes = 0;
             zero_bytes = ROUND_UP(page_offset + phdr.p_memsz, PGSIZE);
           }
@@ -528,7 +563,7 @@ struct fd_entry {
 static struct fd_entry* get_fd_entry(int fd) {
   struct list_elem* e;
   struct fd_entry* fe = NULL;
-  struct list* fd_table = &thread_current()->desc_table;
+  struct list* fd_table = &thread_current()->files;
 
   for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
     struct fd_entry* tmp = list_entry(e, struct fd_entry, elem);
@@ -572,7 +607,7 @@ int process_open(const char* file_name) {
     return -1;
   fd_entry->fd = allocate_fd();
   fd_entry->file = f;
-  list_push_back(&thread_current()->desc_table, &fd_entry->elem);
+  list_push_back(&thread_current()->files, &fd_entry->elem);
 
   return fd_entry->fd;
 }

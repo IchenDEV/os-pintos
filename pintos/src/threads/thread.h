@@ -25,6 +25,22 @@ typedef int tid_t;
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63     /* Highest priority. */
 
+//作为孩子元素的线程信息
+// 当原来线程被摧毁之后，仍然存在。只有当父进程读到他结束的状态之后，才释放。
+struct as_child_thread {
+  tid_t tid;
+  int exit_status;
+  struct list_elem child_thread_elem;
+  bool bewaited;
+  struct semaphore sema;
+};
+//被某个线程打开的文件
+struct opened_file {
+  int fd;
+  struct file* file;
+  struct list_elem file_elem;
+};
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -76,11 +92,11 @@ typedef int tid_t;
    set to THREAD_MAGIC.  Stack overflow will normally change this
    value, triggering the assertion. */
 /* The `elem' member has a dual purpose.  It can be an element in
-      the run queue (thread.c), or it can be an element in a
-      semaphore wait list (synch.c).  It can be used these two ways
-      only because they are mutually exclusive: only a thread in the
-      ready state is on the run queue, whereas only a thread in the
-      blocked state is on a semaphore wait list. */
+         the run queue (thread.c), or it can be an element in a
+         semaphore wait list (synch.c).  It can be used these two ways
+         only because they are mutually exclusive: only a thread in the
+         ready state is on the run queue, whereas only a thread in the
+         blocked state is on a semaphore wait list. */
 struct thread {
   /* Owned by thread.c. */
   tid_t tid;                 /* Thread identifier. */
@@ -96,14 +112,23 @@ struct thread {
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
   char* prog_name;
+
   uint32_t* pagedir; /* Page directory. */
-  struct list children;
-  struct list desc_table;
+
+  bool exec_success; //用于exec,判断子进程是否成功load its executable
+
+  struct file* self_file; //自己这个可执行文件
   tid_t parent_tid;
   int next_fd;
   struct file* executable;
 #endif
+  struct thread* parent; //父进程
+  struct list children;
+  struct list files; //打开的文件
+  struct semaphore exec_sema; //用于exec同步，只有当子进程load成功后，父进程才能从exec返回
+  struct as_child_thread* pointer_as_child_thread;
 
+  int exit_status; //退出状态
   /* Owned by thread.c. */
   unsigned magic; /* Detects stack overflow. */
 };
