@@ -272,21 +272,8 @@ void thread_exit(int status) {
   intr_disable();
 
   //信号量加上
-  thread_current()->pointer_as_child_thread->exit_status = thread_current()->exit_status;
+  thread_current()->pointer_as_child_thread->exit_status = status;
   sema_up(&thread_current()->pointer_as_child_thread->sema);
-
-  // 关闭所有打开的文件
-  struct list_elem* e;
-  struct list* files = &thread_current()->files;
-  while (!list_empty(files)) {
-    e = list_pop_front(files);
-    struct opened_file* f = list_entry(e, struct opened_file, file_elem);
-
-    file_close(f->file);
-
-    list_remove(e);
-    free(f);
-  }
 
   list_remove(&thread_current()->allelem);
   thread_current()->status = THREAD_DYING;
@@ -427,6 +414,8 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->magic = THREAD_MAGIC;
 
   list_init(&t->children);
+  sema_init(&t->exec_sema, 0);
+  t->exit_status = UINT32_MAX;
 
   if (t == initial_thread)
     t->parent = NULL;

@@ -56,25 +56,18 @@ tid_t process_execute(const char* file_name) {
   }
 
   tid = thread_create(cmd_name, PRI_DEFAULT, start_process, fn_copy);
+  //父进程阻塞，等待子进程load完
 
+  struct thread* t = thread_get(tid);
   if (tid == TID_ERROR) {
     palloc_free_page(fn_copy);
     free(cmd_name);
     return TID_ERROR;
   }
 
-  //父进程阻塞，等待子进程load完
-
-  struct thread* t = thread_get(tid);
-
   t->next_fd = 2;
   t->prog_name = cmd_name;
   list_init(&t->files);
-
-  sema_init(&t->exec_sema, 0);
-  sema_down(&t->exec_sema);
-  if (!t->exec_success)
-    return TID_ERROR;
 
   return tid;
 }
@@ -95,6 +88,7 @@ static void start_process(void* file_name_) {
 
   /* If load failed, quit. */
   palloc_free_page(cmd_line);
+
   if (!success)
     thread_exit(-1);
 
@@ -172,7 +166,6 @@ void process_exit(int status) {
     pagedir_activate(NULL);
     pagedir_destroy(pd);
   }
-  sema_up(&cur->exec_sema);
 }
 
 /* Sets up the CPU for running user code in the current
