@@ -4,6 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include <list.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -21,7 +22,7 @@
 #define THREAD_MAGIC 0xcd6abf4b
 
 /* List of processes in THREAD_READY state, that is, processes
-      that are ready to run but not actually running. */
+         that are ready to run but not actually running. */
 static struct list ready_list;
 
 /* List of all processes.  Processes are added to this list
@@ -197,6 +198,9 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   /* Add to run queue. */
   thread_unblock(t);
 
+  if (thread_current()->priority < priority)
+    thread_yield();
+
   return tid;
 }
 
@@ -311,7 +315,10 @@ void thread_foreach(thread_action_func* func, void* aux) {
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
-void thread_set_priority(int new_priority) { thread_current()->priority = new_priority; }
+void thread_set_priority(int new_priority) {
+  thread_current()->priority = new_priority;
+  thread_yield(); //yied
+}
 
 /* Returns the current thread's priority. */
 int thread_get_priority(void) { return thread_current()->priority; }
@@ -438,6 +445,11 @@ static void* alloc_frame(struct thread* t, size_t size) {
   return t->stack;
 }
 
+bool thread_compare_priority(const struct list_elem* a, const struct list_elem* b,
+                             void* aux UNUSED) {
+  return list_entry(a, struct thread, elem)->priority <
+         list_entry(b, struct thread, elem)->priority;
+}
 /* Chooses and returns the next thread to be scheduled.  Should
    return a thread from the run queue, unless the run queue is
    empty.  (If the running thread can continue running, then it
@@ -446,8 +458,11 @@ static void* alloc_frame(struct thread* t, size_t size) {
 static struct thread* next_thread_to_run(void) {
   if (list_empty(&ready_list))
     return idle_thread;
-  else
-    return list_entry(list_pop_front(&ready_list), struct thread, elem);
+  else {
+    struct list_elem* max_priority = list_max(&ready_list, thread_compare_priority, NULL);
+    list_remove(max_priority);
+    return list_entry(max_priority, struct thread, elem);
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page

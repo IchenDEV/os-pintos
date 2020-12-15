@@ -92,11 +92,11 @@ struct opened_file {
    set to THREAD_MAGIC.  Stack overflow will normally change this
    value, triggering the assertion. */
 /* The `elem' member has a dual purpose.  It can be an element in
-         the run queue (thread.c), or it can be an element in a
-         semaphore wait list (synch.c).  It can be used these two ways
-         only because they are mutually exclusive: only a thread in the
-         ready state is on the run queue, whereas only a thread in the
-         blocked state is on a semaphore wait list. */
+            the run queue (thread.c), or it can be an element in a
+            semaphore wait list (synch.c).  It can be used these two ways
+            only because they are mutually exclusive: only a thread in the
+            ready state is on the run queue, whereas only a thread in the
+            blocked state is on a semaphore wait list. */
 struct thread {
   /* Owned by thread.c. */
   tid_t tid;                 /* Thread identifier. */
@@ -130,6 +130,11 @@ struct thread {
 
   int exit_status; //退出状态
   /* Owned by thread.c. */
+
+  struct list locks;         /* Locks this thread holds */
+  struct lock* waiting_lock; /* The lock this thread is waiting for */
+  int original_priority;
+
   unsigned magic; /* Detects stack overflow. */
 };
 
@@ -138,6 +143,8 @@ struct thread {
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
+bool thread_compare_priority(const struct list_elem* a, const struct list_elem* b,
+                             void* aux UNUSED);
 void thread_init(void);
 void thread_start(void);
 

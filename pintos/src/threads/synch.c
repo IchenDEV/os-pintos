@@ -3,28 +3,28 @@
    is reproduced in full below. */
 
 /* Copyright (c) 1992-1996 The Regents of the University of California.
-   All rights reserved.
+      All rights reserved.
 
-   Permission to use, copy, modify, and distribute this software
-   and its documentation for any purpose, without fee, and
-   without written agreement is hereby granted, provided that the
-   above copyright notice and the following two paragraphs appear
-   in all copies of this software.
+      Permission to use, copy, modify, and distribute this software
+      and its documentation for any purpose, without fee, and
+      without written agreement is hereby granted, provided that the
+      above copyright notice and the following two paragraphs appear
+      in all copies of this software.
 
-   IN NO EVENT SHALL THE UNIVERSITY OF CALIFORNIA BE LIABLE TO
-   ANY PARTY FOR DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR
-   CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OF THIS SOFTWARE
-   AND ITS DOCUMENTATION, EVEN IF THE UNIVERSITY OF CALIFORNIA
-   HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+      IN NO EVENT SHALL THE UNIVERSITY OF CALIFORNIA BE LIABLE TO
+      ANY PARTY FOR DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR
+      CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE OF THIS SOFTWARE
+      AND ITS DOCUMENTATION, EVEN IF THE UNIVERSITY OF CALIFORNIA
+      HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-   THE UNIVERSITY OF CALIFORNIA SPECIFICALLY DISCLAIMS ANY
-   WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-   PURPOSE.  THE SOFTWARE PROVIDED HEREUNDER IS ON AN "AS IS"
-   BASIS, AND THE UNIVERSITY OF CALIFORNIA HAS NO OBLIGATION TO
-   PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR
-   MODIFICATIONS.
-*/
+      THE UNIVERSITY OF CALIFORNIA SPECIFICALLY DISCLAIMS ANY
+      WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+      WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+      PURPOSE.  THE SOFTWARE PROVIDED HEREUNDER IS ON AN "AS IS"
+      BASIS, AND THE UNIVERSITY OF CALIFORNIA HAS NO OBLIGATION TO
+      PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR
+      MODIFICATIONS.
+   */
 
 #include "threads/synch.h"
 #include <stdio.h>
@@ -33,14 +33,14 @@
 #include "threads/thread.h"
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
-   nonnegative integer along with two atomic operators for
-   manipulating it:
+      nonnegative integer along with two atomic operators for
+      manipulating it:
 
-   - down or "P": wait for the value to become positive, then
-     decrement it.
+      - down or "P": wait for the value to become positive, then
+        decrement it.
 
-   - up or "V": increment the value (and wake up one waiting
-     thread, if any). */
+      - up or "V": increment the value (and wake up one waiting
+        thread, if any). */
 void sema_init(struct semaphore* sema, unsigned value) {
   ASSERT(sema != NULL);
 
@@ -102,10 +102,14 @@ void sema_up(struct semaphore* sema) {
   ASSERT(sema != NULL);
 
   old_level = intr_disable();
-  if (!list_empty(&sema->waiters))
-    thread_unblock(list_entry(list_pop_front(&sema->waiters), struct thread, elem));
+  if (!list_empty(&sema->waiters)) {
+    struct list_elem* max_priority = list_max(&sema->waiters, thread_compare_priority, NULL);
+    list_remove(max_priority);
+    thread_unblock(list_entry(max_priority, struct thread, elem));
+  }
   sema->value++;
   intr_set_level(old_level);
+  thread_yield();
 }
 
 static void sema_test_helper(void* sema_);
@@ -174,6 +178,19 @@ void lock_acquire(struct lock* lock) {
   ASSERT(!intr_context());
   ASSERT(!lock_held_by_current_thread(lock));
 
+  if (lock->holder != NULL && !thread_mlfqs) {
+    thread_current()->waiting_lock = lock;
+    struct lock* wlock = lock;
+    while (wlock != NULL && thread_current()->priority > wlock->max_priority) {
+      wlock->max_priority = thread_current()->priority;
+      struct list_elem* max_priority_in_locks =
+          list_max(&wlock->holder->locks, lock_compare_max_priority, NULL);
+      int maximal = list_entry(max_priority_in_locks, struct lock, elem)->max_priority;
+      if (wlock->holder->priority < maximal)
+        wlock->holder->priority = maximal;
+      wlock = wlock->holder->waiting_lock;
+    }
+  }
   sema_down(&lock->semaphore);
   lock->holder = thread_current();
 }
@@ -267,7 +284,12 @@ void cond_wait(struct condition* cond, struct lock* lock) {
   sema_down(&waiter.semaphore);
   lock_acquire(lock);
 }
-
+bool cond_compare_priority(const struct list_elem* a, const struct list_elem* b, void* aux UNUSED) {
+  struct semaphore_elem* sa = list_entry(a, struct semaphore_elem, elem);
+  struct semaphore_elem* sb = list_entry(b, struct semaphore_elem, elem);
+  return list_entry(list_front(&sa->semaphore.waiters), struct thread, elem)->priority <
+         list_entry(list_front(&sb->semaphore.waiters), struct thread, elem)->priority;
+}
 /* If any threads are waiting on COND (protected by LOCK), then
    this function signals one of them to wake up from its wait.
    LOCK must be held before calling this function.
@@ -281,8 +303,11 @@ void cond_signal(struct condition* cond, struct lock* lock UNUSED) {
   ASSERT(!intr_context());
   ASSERT(lock_held_by_current_thread(lock));
 
-  if (!list_empty(&cond->waiters))
-    sema_up(&list_entry(list_pop_front(&cond->waiters), struct semaphore_elem, elem)->semaphore);
+  if (!list_empty(&cond->waiters)) {
+    struct list_elem* max_priority = list_max(&cond->waiters, cond_compare_priority, NULL);
+    list_remove(max_priority);
+    sema_up(&list_entry(max_priority, struct semaphore_elem, elem)->semaphore);
+  }
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
