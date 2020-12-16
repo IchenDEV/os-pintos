@@ -25,6 +25,9 @@ typedef int tid_t;
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63     /* Highest priority. */
 
+/* List of processes in THREAD_READY state, that is, processes
+         that are ready to run but not actually running. */
+static struct list ready_list;
 //作为孩子元素的线程信息
 // 当原来线程被摧毁之后，仍然存在。只有当父进程读到他结束的状态之后，才释放。
 struct as_child_thread {
@@ -92,11 +95,11 @@ struct opened_file {
    set to THREAD_MAGIC.  Stack overflow will normally change this
    value, triggering the assertion. */
 /* The `elem' member has a dual purpose.  It can be an element in
-            the run queue (thread.c), or it can be an element in a
-            semaphore wait list (synch.c).  It can be used these two ways
-            only because they are mutually exclusive: only a thread in the
-            ready state is on the run queue, whereas only a thread in the
-            blocked state is on a semaphore wait list. */
+               the run queue (thread.c), or it can be an element in a
+               semaphore wait list (synch.c).  It can be used these two ways
+               only because they are mutually exclusive: only a thread in the
+               ready state is on the run queue, whereas only a thread in the
+               blocked state is on a semaphore wait list. */
 struct thread {
   /* Owned by thread.c. */
   tid_t tid;                 /* Thread identifier. */
@@ -131,9 +134,11 @@ struct thread {
   int exit_status; //退出状态
   /* Owned by thread.c. */
 
-  struct list locks;         /* Locks this thread holds */
+  struct list locks; /* Locks this thread holds */
+
   struct lock* waiting_lock; /* The lock this thread is waiting for */
   int original_priority;
+  int nice;
 
   unsigned magic; /* Detects stack overflow. */
 };
@@ -143,8 +148,6 @@ struct thread {
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
-bool thread_compare_priority(const struct list_elem* a, const struct list_elem* b,
-                             void* aux UNUSED);
 void thread_init(void);
 void thread_start(void);
 
@@ -167,6 +170,15 @@ void thread_yield(void);
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func(struct thread* t, void* aux);
 void thread_foreach(thread_action_func*, void*);
+
+bool thread_compare_priority(const struct list_elem* a, const struct list_elem* b,
+                             void* aux UNUSED);
+
+/* Function for lock max priority comparison. */
+bool lock_cmp_priority(const struct list_elem* a, const struct list_elem* b, void* aux UNUSED);
+void thread_hold_the_lock(struct lock* lock);
+void thread_remove_lock(struct lock* lock);
+void blocked_thread_check(struct thread* t, void* aux UNUSED);
 
 int thread_get_priority(void);
 void thread_set_priority(int);
