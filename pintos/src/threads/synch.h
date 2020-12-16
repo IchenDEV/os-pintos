@@ -30,6 +30,8 @@ bool lock_try_acquire(struct lock*);
 void lock_release(struct lock*);
 bool lock_held_by_current_thread(const struct lock*);
 
+bool lock_cmp_priority(const struct list_elem* a, const struct list_elem* b, void* aux);
+
 /* Condition variable. */
 struct condition {
   struct list waiters; /* List of waiting threads. */
@@ -39,7 +41,7 @@ void cond_init(struct condition*);
 void cond_wait(struct condition*, struct lock*);
 void cond_signal(struct condition*, struct lock*);
 void cond_broadcast(struct condition*, struct lock*);
-
+bool cond_sema_cmp_priority(const struct list_elem* a, const struct list_elem* b, void* aux);
 /* Optimization barrier.
 
    The compiler will not reorder operations across an

@@ -25,9 +25,6 @@ typedef int tid_t;
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63     /* Highest priority. */
 
-/* List of processes in THREAD_READY state, that is, processes
-         that are ready to run but not actually running. */
-static struct list ready_list;
 //作为孩子元素的线程信息
 // 当原来线程被摧毁之后，仍然存在。只有当父进程读到他结束的状态之后，才释放。
 struct as_child_thread {
@@ -95,11 +92,11 @@ struct opened_file {
    set to THREAD_MAGIC.  Stack overflow will normally change this
    value, triggering the assertion. */
 /* The `elem' member has a dual purpose.  It can be an element in
-               the run queue (thread.c), or it can be an element in a
-               semaphore wait list (synch.c).  It can be used these two ways
-               only because they are mutually exclusive: only a thread in the
-               ready state is on the run queue, whereas only a thread in the
-               blocked state is on a semaphore wait list. */
+                  the run queue (thread.c), or it can be an element in a
+                  semaphore wait list (synch.c).  It can be used these two ways
+                  only because they are mutually exclusive: only a thread in the
+                  ready state is on the run queue, whereas only a thread in the
+                  blocked state is on a semaphore wait list. */
 struct thread {
   /* Owned by thread.c. */
   tid_t tid;                 /* Thread identifier. */
@@ -139,7 +136,8 @@ struct thread {
   struct lock* waiting_lock; /* The lock this thread is waiting for */
   int original_priority;
   int nice;
-
+  int recent_cpu;
+  int64_t ticks_blocked;
   unsigned magic; /* Detects stack overflow. */
 };
 
@@ -159,7 +157,7 @@ tid_t thread_create(const char* name, int priority, thread_func*, void*);
 
 void thread_block(void);
 void thread_unblock(struct thread*);
-
+void blocked_thread_check(struct thread* t, void* aux UNUSED);
 struct thread* thread_current(void);
 tid_t thread_tid(void);
 const char* thread_name(void);
