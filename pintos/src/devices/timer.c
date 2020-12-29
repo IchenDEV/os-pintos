@@ -76,9 +76,7 @@ int64_t timer_elapsed(int64_t then) { return timer_ticks() - then; }
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
 void timer_sleep(int64_t ticks) {
-  if (ticks <= 0) {
-    return;
-  }
+  if (ticks <= 0)return;
   ASSERT(intr_get_level() == INTR_ON);
   enum intr_level old_level = intr_disable();
   struct thread* current_thread = thread_current();
