@@ -112,24 +112,22 @@ struct thread {
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
   char* prog_name;
-
   uint32_t* pagedir; /* Page directory. */
 
   bool exec_success; //用于exec,判断子进程是否成功load its executable
 
-  struct file* self_file; //自己这个可执行文件
   tid_t parent_tid;
   int next_fd;
   struct file* executable;
-#endif
+
   struct thread* parent; //父进程
-  struct list children;
+  struct list children;//子进程
   struct list files; //打开的文件
   struct semaphore exec_sema; //用于exec同步，只有当子进程load成功后，父进程才能从exec返回
   struct as_child_thread* pointer_as_child_thread;
-
+#endif
   int exit_status; //退出状态
-  /* Owned by thread.c. */
+
   unsigned magic; /* Detects stack overflow. */
 };
 

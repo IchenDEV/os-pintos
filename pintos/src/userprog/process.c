@@ -84,13 +84,18 @@ static void start_process(void* file_name_) {
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+  sema_up(&thread_current()->exec_sema);
   success = load(cmd_line, &if_.eip, &if_.esp);
+  sema_down(&thread_current()->exec_sema);
 
   /* If load failed, quit. */
   palloc_free_page(cmd_line);
 
+  sema_up(&thread_current()->parent->exec_sema);
+  
   if (!success)
     thread_exit(-1);
+
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -272,12 +277,16 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   char *process_name, save_ptr;
   process_name = strtok_r(fn_cp, " ", &save_ptr);
 
+  acquire_file_lock();
   /* Open executable file. */
   file = filesys_open(process_name);
   if (file == NULL) {
     printf("load: %s: open failed\n", process_name);
     goto done;
   }
+  thread_current()->executable = file;
+    // deny write to executables
+  file_deny_write(file);
 
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
@@ -357,7 +366,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
 
 done:
   /* We arrive here whether the load is successful or not. */
-  file_close(file);
+  release_file_lock();//此处不关闭，当线程结束后再关闭
   return success;
 }
 
