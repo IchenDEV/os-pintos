@@ -48,13 +48,17 @@ tid_t process_execute(const char* file_name) {
   extract_command_name(fn_copy, cmd_name);
 
   /* Create a new thread to execute FILE_NAME. */
+  acquire_file_lock();
   struct file* f = filesys_open(cmd_name); //检查是否存在
   if (f == NULL) {
+    release_file_lock();
     palloc_free_page(fn_copy);
     free(cmd_name);
     return TID_ERROR;
   }
-
+  file_close(f);
+  release_file_lock();
+  
   tid = thread_create(cmd_name, PRI_DEFAULT, start_process, fn_copy);
   //父进程阻塞，等待子进程load完
 
@@ -92,10 +96,9 @@ static void start_process(void* file_name_) {
   palloc_free_page(cmd_line);
 
   sema_up(&thread_current()->parent->exec_sema);
-  
+
   if (!success)
     thread_exit(-1);
-
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -285,7 +288,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
     goto done;
   }
   thread_current()->executable = file;
-    // deny write to executables
+  // deny write to executables
   file_deny_write(file);
 
   /* Read and verify executable header. */
@@ -366,7 +369,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
 
 done:
   /* We arrive here whether the load is successful or not. */
-  release_file_lock();//此处不关闭，当线程结束后再关闭
+  release_file_lock(); //此处不关闭，当线程结束后再关闭
   return success;
 }
 
@@ -581,7 +584,10 @@ int process_write(int fd, const void* buffer, unsigned size) {
     putbuf((char*)buffer, (size_t)size);
     return (int)size;
   } else if (get_fd_entry(fd) != NULL) {
-    return file_write(get_fd_entry(fd)->file, buffer, size);
+    acquire_file_lock();
+    int si = file_write(get_fd_entry(fd)->file, buffer, size);
+    release_file_lock();
+    return si;
   }
   return -1;
 }
@@ -591,8 +597,10 @@ int process_read(int fd, void* buffer, unsigned size) {
     //getbuf((char*)buffer, (size_t)size);
     return (int)size;
   } else if (get_fd_entry(fd) != NULL) {
-    file_read(get_fd_entry(fd)->file, buffer, size);
-    return (int)size;
+    acquire_file_lock();
+    int si = file_read(get_fd_entry(fd)->file, buffer, size);
+    release_file_lock();
+    return si;
   }
   return -1;
 }
@@ -601,7 +609,9 @@ int process_read(int fd, void* buffer, unsigned size) {
 static int allocate_fd(void) { return thread_current()->next_fd++; }
 
 int process_open(const char* file_name) {
+  acquire_file_lock();
   struct file* f = filesys_open(file_name);
+  release_file_lock();
   if (f == NULL)
     return -1;
   struct fd_entry* fd_entry = malloc(sizeof(struct fd_entry));
@@ -637,7 +647,9 @@ void process_seek(int fd, unsigned position) {
 void process_close(int fd) {
   struct fd_entry* fd_entry = get_fd_entry(fd);
   if (fd_entry != NULL) {
+    acquire_file_lock();
     file_close(fd_entry->file);
+    release_file_lock();
     list_remove(&fd_entry->elem);
     free(fd_entry);
   }
