@@ -18,7 +18,7 @@
 
 ```c
     int n = argc - 1;
-    while (n >= 0) {
+    while (n >= 0) {//放入启动参数
       *esp = *esp - strlen(argv[n]) - 1;
       strlcpy(*esp, argv[n], strlen(argv[n]) + 1);
       address[n--] = *(char**)esp;
@@ -34,17 +34,17 @@
     int t = argc - 1;
     while (t >= 0) {
       *esp = *esp - 4;
-      memcpy(*esp, &address[t--], sizeof(char**));
+      memcpy(*esp, &address[t--], sizeof(char**)); //放入启动参数地址
     }
 
     void* argv0 = *esp;
     *esp = *esp - 4;
-    memcpy(*esp, &argv0, sizeof(char**));//argv
+    memcpy(*esp, &argv0, sizeof(char**));//放入argv
 
     *esp = *esp - 4;
-    memcpy(*esp, &argc, sizeof(int));//argc
+    memcpy(*esp, &argc, sizeof(int));//放入argc
 
-    *esp = *esp - 4;//返回值地址
+    *esp = *esp - 4;//返回值地址0
 ```
 
 ## Task 2: Process Control Syscalls
@@ -60,6 +60,7 @@
   f->eax = args[1] + 1;
 ```
 
+practice很好过
 ### System Call: void halt (void)
 
 根据类型号，当判断是halt时调用`shutdown_power_off`关机
@@ -78,9 +79,12 @@
 
 ### System Call: pid t exec (const char *cmd line)
 
+exec 就要新建立一个进程，显然要调用，并且需要一个list来存储子进程，让父进程可以管理子进程。于是设计
+
 ### System Call: int wait (pid t pid)
 
 ### Warp
+
 为了方便，对SystemCall处理函数进行了一些封装
 
 ## Task 3: File Operation Syscalls
@@ -92,7 +96,9 @@
 ### System Call: int read (int fd, void *buffer, unsigned size)
 ### System Call: int write (int fd, const void *buffer, unsigned size) 
 ### System Call: void seek (int fd, unsigned position)
+
 ### System Call: unsigned tell (int fd)
+
 ### System Call: void close (int fd)
 ## Additional Questions in cs162
 
