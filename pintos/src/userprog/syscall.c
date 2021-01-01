@@ -11,7 +11,7 @@
 
 typedef int pid_t;
 static int (*syscall_handlers[20])(struct intr_frame*); /* Array of syscall functions */
-
+struct lock file_system_lock;
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
    Returns the byte value if successful, -1 if a segfault
@@ -20,13 +20,22 @@ static int get_user(const uint8_t* uaddr) {
   if (!is_user_vaddr(uaddr))
     return -1;
 
-  if (pagedir_get_page(thread_current()->pagedir, uaddr) == NULL)
-    return -1;
-
   int result;
   asm("movl $1f, %0; movzbl %1, %0; 1:" : "=&a"(result) : "m"(*uaddr));
   return result;
 }
+
+/* Writes BYTE to user address UDST.
+   UDST must be below PHYS_BASE.
+   Returns true if successful, false if a segfault occurred. */
+static bool put_user(uint8_t* udst, uint8_t byte) {
+  if (!is_user_vaddr(udst))
+    return false;
+  int error_code;
+  asm("movl $1f, %0; movb %b2, %1; 1:" : "=&a"(error_code), "=m"(*udst) : "q"(byte));
+  return error_code != -1;
+}
+
 static bool is_valid_string(void* str) {
   int ch = -1;
   while ((ch = get_user((uint8_t*)str++)) != '\0' && ch != -1)
@@ -37,10 +46,26 @@ static bool is_valid_string(void* str) {
     return false;
 }
 
-static bool syscall_create(const char* file_name, unsigned initial_size) {
-  return filesys_create(file_name, initial_size);
+static bool is_valid_pointer(void* esp, uint8_t argc) {
+  uint8_t i = 0;
+  for (; i < argc; ++i) {
+    if (get_user(((uint8_t*)esp) + i) == -1) {
+      return false;
+    }
+  }
+  return true;
 }
-static bool syscall_remove(const char* file_name) { return filesys_remove(file_name); }
+
+static bool syscall_create(const char* file_name, unsigned initial_size) {
+  acquire_file_lock();
+  bool successful = filesys_create(file_name, initial_size);
+  release_file_lock();
+  return successful;
+}
+static bool syscall_remove(const char* file_name) {
+  bool successful = filesys_remove(file_name);
+  return successful;
+}
 
 static void kill_program(void) {
   printf("%s: exit(%d)\n", &thread_current()->name, -1);
@@ -51,16 +76,6 @@ static pid_t syscall_exec(const char* file_name) { return process_execute(file_n
 static void syscall_halt(void) { shutdown_power_off(); }
 
 static pid_t syscall_wait(pid_t pid) { return process_wait(pid); }
-
-static bool is_valid_pointer(void* esp, uint8_t argc) {
-  uint8_t i = 0;
-  for (; i < argc; ++i) {
-    if (get_user(((uint8_t*)esp) + i) == -1) {
-      return false;
-    }
-  }
-  return true;
-}
 
 static void syscall_handler(struct intr_frame* f UNUSED) {
 
@@ -124,7 +139,6 @@ static int syscall_write_wrapper(struct intr_frame* f) {
   unsigned size = *(unsigned*)(f->esp + 12);
   if (!is_valid_pointer(buffer, 1) || !is_valid_pointer(buffer + size, 1))
     return -1;
-
   int written_size = process_write(fd, buffer, size);
   f->eax = written_size;
   return 0;
@@ -140,7 +154,6 @@ static int syscall_read_wrapper(struct intr_frame* f) {
 
   if (!is_valid_pointer(buffer, 1) || !is_valid_pointer(buffer + size, 1))
     return -1;
-
   int written_size = process_read(fd, buffer, size);
   f->eax = size;
   return 0;
@@ -156,7 +169,9 @@ static int syscall_seek_wrapper(struct intr_frame* f) {
   }
   int fd = *(int*)(f->esp + 4);
   unsigned pos = *(unsigned*)(f->esp + 8);
+  acquire_file_lock();
   process_seek(fd, pos);
+  release_file_lock();
   return 0;
 }
 
@@ -165,7 +180,9 @@ static int syscall_tell_wrapper(struct intr_frame* f) {
     return -1;
   }
   int fd = *(int*)(f->esp + 4);
+  acquire_file_lock();
   f->eax = process_tell(fd);
+  release_file_lock();
   return 0;
 }
 static int syscall_wait_wrapper(struct intr_frame* f) {
@@ -178,19 +195,19 @@ static int syscall_wait_wrapper(struct intr_frame* f) {
   return 0;
 }
 static int syscall_open_wrapper(struct intr_frame* f) {
-  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4))) {
+  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4)))
     return -1;
-  }
+
   char* str = *(char**)(f->esp + 4);
   f->eax = process_open(str);
   return 0;
 }
 static int syscall_close_wrapper(struct intr_frame* f) {
-  if (!is_valid_pointer(f->esp + 4, 4)) {
+  if (!is_valid_pointer(f->esp + 4, 4))
     return -1;
-  }
+
   int fd = *(int*)(f->esp + 4);
-  process_tell(fd);
+  process_close(fd);
   return 0;
 }
 static int syscall_create_wrapper(struct intr_frame* f) {
@@ -208,7 +225,9 @@ static int syscall_remove_wrapper(struct intr_frame* f) {
     return -1;
 
   char* str = *(char**)(f->esp + 4);
+  acquire_file_lock();
   f->eax = syscall_remove(str);
+  release_file_lock();
   return 0;
 }
 static int syscall_exec_wrapper(struct intr_frame* f) {
@@ -231,11 +250,12 @@ static int syscall_exec_wrapper(struct intr_frame* f) {
 }
 
 static int syscall_filesize_wrapper(struct intr_frame* f) {
-  if (!is_valid_pointer(f->esp + 4, 4)) {
+  if (!is_valid_pointer(f->esp + 4, 4))
     return -1;
-  }
   int fd = *(int*)(f->esp + 4);
+  acquire_file_lock();
   f->eax = process_filesize(fd);
+  release_file_lock();
   return 0;
 }
 

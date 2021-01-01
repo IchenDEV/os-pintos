@@ -40,6 +40,9 @@ static struct thread* initial_thread;
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+//用于文件操作的全局锁
+static struct lock file_lock;
+
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame {
   void* eip;             /* Return address. */
@@ -90,6 +93,8 @@ void thread_init(void) {
   ASSERT(intr_get_level() == INTR_OFF);
 
   lock_init(&tid_lock);
+  lock_init(&file_lock);
+
   list_init(&ready_list);
   list_init(&all_list);
 
@@ -165,6 +170,11 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
 
   ASSERT(function != NULL);
 
+#ifdef USERPROG
+  if (list_size(&all_list) >= 35) /* Maximum threads */
+    return TID_ERROR;
+#endif
+
   /* Allocate thread. */
   t = palloc_get_page(PAL_ZERO);
   if (t == NULL)
@@ -173,7 +183,7 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   /* Initialize thread. */
   init_thread(t, name, priority);
   tid = t->tid = allocate_tid();
-
+#ifdef USERPROG
   //初始化孩子元素
   t->pointer_as_child_thread = malloc(sizeof(struct as_child_thread));
   t->pointer_as_child_thread->tid = tid;
@@ -181,7 +191,7 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   t->pointer_as_child_thread->bewaited = false;
   sema_init(&t->pointer_as_child_thread->sema, 0);
   list_push_back(&thread_current()->children, &t->pointer_as_child_thread->child_thread_elem);
-
+#endif
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame(t, sizeof *kf);
   kf->eip = NULL;
@@ -277,10 +287,26 @@ void thread_exit(int status) {
      when it calls thread_schedule_tail(). */
   intr_disable();
 
-  //信号量加上
+#ifdef USERPROG  //信号量加上
   thread_current()->pointer_as_child_thread->exit_status = status;
   sema_up(&thread_current()->pointer_as_child_thread->sema);
 
+  //关闭可执行文件，间接允许了对该可执行文件进行修改（file_allow_write）
+  file_close(thread_current()->executable);
+  // 关闭所有打开的文件
+  struct list_elem* e;
+  struct list* files = &thread_current()->files;
+
+  while (!list_empty(files)) {
+    e = list_pop_front(files);
+    struct opened_file* f = list_entry(e, struct opened_file, file_elem);
+    acquire_file_lock();
+    file_close(f->file);
+    release_file_lock();
+    list_remove(e);
+    free(f);
+  }
+#endif
   list_remove(&thread_current()->allelem);
   thread_current()->status = THREAD_DYING;
   schedule();
@@ -438,15 +464,19 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   load_avg = FP_CONST(0);
   t->magic = THREAD_MAGIC;
   t->ticks_blocked = 0;
+#ifdef USERPROG
   list_init(&t->children);
+  list_init(&t->files);
   sema_init(&t->exec_sema, 0);
   t->exit_status = UINT32_MAX;
+  t->executable = NULL;
+  t->next_fd = 2;
 
   if (t == initial_thread)
     t->parent = NULL;
   else
     t->parent = thread_current();
-
+#endif
   old_level = intr_disable();
   list_insert_ordered(&all_list, &t->allelem, (list_less_func*)&thread_compare_priority, NULL);
 
@@ -558,9 +588,9 @@ static tid_t allocate_tid(void) {
   return tid;
 }
 
-/* Offset of `stack' member within `struct thread'.
-   Used by switch.S, which can't figure it out on its own. */
-uint32_t thread_stack_ofs = offsetof(struct thread, stack);
+void acquire_file_lock() { lock_acquire(&file_lock); }
+
+void release_file_lock() { lock_release(&file_lock); }
 
 struct thread* thread_get(tid_t tid) {
   struct list_elem* e;
@@ -683,3 +713,7 @@ int thread_get_load_avg(void) { return FP_ROUND(FP_MULT_MIX(load_avg, 100)); }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int thread_get_recent_cpu(void) { return FP_ROUND(FP_MULT_MIX(thread_current()->recent_cpu, 100)); }
+
+/* Offset of `stack' member within `struct thread'.
+   Used by switch.S, which can't figure it out on its own. */
+uint32_t thread_stack_ofs = offsetof(struct thread, stack);
