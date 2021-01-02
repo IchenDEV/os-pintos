@@ -61,9 +61,10 @@
 ```
 
 practice很好过
+
 ### System Call: void halt (void)
 
-根据类型号，当判断是halt时调用`shutdown_power_off`关机
+和前面的一样根据类型号，当判断是halt时调用`shutdown_power_off`关机
 
 ```c
     shutdown_power_off();
@@ -79,9 +80,61 @@ practice很好过
 
 ### System Call: pid t exec (const char *cmd line)
 
-exec 就要新建立一个进程，显然要调用，并且需要一个list来存储子进程，让父进程可以管理子进程。于是设计
+exec 就要新建立一个进程，显然要调用`process_execute`，并且需要一个list来存储子进程，让父进程可以管理子进程。于是设计以下字段来保存信息
+
+```c
+  struct thread* parent; //父进程
+  struct list children;//子进程
+  struct semaphore exec_sema; //用于exec同步，只有当子进程load成功后，父进程才能从exec返回
+  struct as_child_thread* pointer_as_child_thread;
+```
+
+当SystemCall时，调用`process_execute`创建新的进程，初始化线程时利用`thread_current`获得父线程id，并完成对父进程id的初始化，初始化代码如下：
+
+```c
+#ifdef USERPROG
+  list_init(&t->children);
+  t->exit_status = UINT32_MAX;
+  if (t == initial_thread)
+    t->parent = NULL;
+  else
+    t->parent = thread_current();
+#endif
+```
+
+同时还需要更新父线程的children的list，将子进程信息加入list，代码如下：
+
+```c
+#ifdef USERPROG
+  //初始化孩子元素
+  t->pointer_as_child_thread = malloc(sizeof(struct as_child_thread));
+  t->pointer_as_child_thread->tid = tid;
+  t->pointer_as_child_thread->exit_status = UINT32_MAX;
+  t->pointer_as_child_thread->bewaited = false;
+  sema_init(&t->pointer_as_child_thread->sema, 0);
+  list_push_back(&thread_current()->children, &t->pointer_as_child_thread->child_thread_elem);
+#endif
+```
+
+此外要判断需要执行的文件是否存在，不妨尝试能否打开该文件来检查是否存在，代码如下
+
+```c
+  acquire_file_lock();
+  struct file* f = filesys_open(cmd_name); //检查是否存在
+  if (f == NULL) {
+    release_file_lock();
+    palloc_free_page(fn_copy);
+    free(cmd_name);
+    return TID_ERROR;
+  }
+  file_close(f);
+  release_file_lock();
+```
 
 ### System Call: int wait (pid t pid)
+
+父线程需要等待所有子线程，所以之前的线程的children派上用场，在children中遍历，找到对应pid，然后利用之前设计的信号量等待子线程完成。
+完成后从list中移除，并读取子线程返回值返回。
 
 ### Warp
 
