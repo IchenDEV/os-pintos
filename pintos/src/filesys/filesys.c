@@ -26,11 +26,15 @@ void filesys_init(bool format) {
     do_format();
 
   free_map_open();
+  current_dir = dir_open_root();
 }
 
 /* Shuts down the file system module, writing any unwritten data
    to disk. */
-void filesys_done(void) { free_map_close(); }
+void filesys_done(void) {
+  dir_close(current_dir);
+  free_map_close();
+}
 
 /* Creates a file named NAME with the given INITIAL_SIZE.
    Returns true if successful, false otherwise.
@@ -38,14 +42,60 @@ void filesys_done(void) { free_map_close(); }
    or if internal memory allocation fails. */
 bool filesys_create(const char* name, off_t initial_size) {
   block_sector_t inode_sector = 0;
-  struct dir* dir = dir_open_root();
-  bool success = (dir != NULL && free_map_allocate(1, &inode_sector) &&
-                  inode_create(inode_sector, initial_size) && dir_add(dir, name, inode_sector));
+  struct dir* dir = current_dir;
+  bool success =
+      (dir != NULL && free_map_allocate(1, &inode_sector) &&
+       inode_create(inode_sector, initial_size, false) && dir_add(dir, name, inode_sector));
+  if (!success && inode_sector != 0)
+    free_map_release(inode_sector, 1);
+
+  return success;
+}
+
+/* Creates a dir named NAME 
+   Returns true if successful, false otherwise.
+   Fails if a file named NAME already exists
+*/
+bool filesys_mkdir(const char* name) {
+  block_sector_t inode_sector = 0;
+  struct dir* dir = current_dir;
+
+  bool success = dir != NULL && name != NULL && free_map_allocate(1, &inode_sector) &&
+                 dir_create(inode_sector, 1) && dir_add(dir, name, inode_sector);
   if (!success && inode_sector != 0)
     free_map_release(inode_sector, 1);
   dir_close(dir);
 
   return success;
+}
+
+/* Creates a dir named NAME 
+   Returns true if successful, false otherwise.
+   Fails if a file named NAME already exists
+*/
+struct dir* filesys_opendir(const char* name) {
+  block_sector_t inode_sector = 0;
+  struct dir* dir = current_dir;
+  struct inode* inode = NULL;
+  struct dir* target = NULL;
+  bool success = dir_lookup(dir, name, inode);
+  if (success) {
+    target = dir_open(inode);
+  }
+  dir_close(dir);
+  return target;
+}
+
+/* Creates a dir named NAME
+   Returns true if successful, false otherwise.
+   Fails if a file named NAME already exists
+*/
+bool filesys_chdir(const char* path) {
+  block_sector_t inode_sector = 0;
+  struct dir* dir = current_dir;
+  current_dir = filesys_opendir(path);
+  dir_close(dir);
+  return current_dir == NULL;
 }
 
 /* Opens the file with the given NAME.
@@ -54,24 +104,39 @@ bool filesys_create(const char* name, off_t initial_size) {
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 struct file* filesys_open(const char* name) {
-  struct dir* dir = dir_open_root();
+  struct dir* dir = current_dir;
   struct inode* inode = NULL;
 
   if (dir != NULL)
     dir_lookup(dir, name, &inode);
-  dir_close(dir);
 
+  if (inode != NULL&&inode_is_dir(inode)) {
+    current_dir = dir_open(inode);
+    dir_close(dir);ﬁ
+  }
   return file_open(inode);
 }
+/* Deletes the file named NAME.
+   Returns true if successful, false on failure.
+   Fails if no file named NAME exists,
+   or if an internal memory allocation fails. */
+bool filesys_is_dir(const char* name) {
+  struct dir* dir = current_dir;
+  struct inode* inode = NULL;
 
+  if (dir != NULL)
+    dir_lookup(dir, name, &inode);
+    if(inode != NULL)
+  return inode_is_dir(inode);
+  return false;
+}
 /* Deletes the file named NAME.
    Returns true if successful, false on failure.
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 bool filesys_remove(const char* name) {
-  struct dir* dir = dir_open_root();
+  struct dir* dir = current_dir;
   bool success = dir != NULL && dir_remove(dir, name);
-  dir_close(dir);
 
   return success;
 }

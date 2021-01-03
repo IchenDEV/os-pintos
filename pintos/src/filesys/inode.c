@@ -15,8 +15,9 @@
 struct inode_disk {
   block_sector_t start; /* First data sector. */
   off_t length;         /* File size in bytes. */
+  bool is_dir;                        /* Indicator of directory file */
   unsigned magic;       /* Magic number. */
-  uint32_t unused[125]; /* Not used. */
+  uint32_t unused[124]; /* Not used. */
 };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -57,7 +58,7 @@ void inode_init(void) { list_init(&open_inodes); }
    device.
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
-bool inode_create(block_sector_t sector, off_t length) {
+bool inode_create(block_sector_t sector, off_t length,bool is_dir) {
   struct inode_disk* disk_inode = NULL;
   bool success = false;
 
@@ -71,6 +72,7 @@ bool inode_create(block_sector_t sector, off_t length) {
   if (disk_inode != NULL) {
     size_t sectors = bytes_to_sectors(length);
     disk_inode->length = length;
+    disk_inode->is_dir =is_dir;
     disk_inode->magic = INODE_MAGIC;
     if (free_map_allocate(sectors, &disk_inode->start)) {
       block_write(fs_device, sector, disk_inode);
@@ -86,6 +88,24 @@ bool inode_create(block_sector_t sector, off_t length) {
     free(disk_inode);
   }
   return success;
+}
+/* Reads inode_disk from disk. Make sure to free after. */
+struct inode_disk *
+get_inode_disk (const struct inode *inode)
+{
+  ASSERT (inode != NULL);
+  struct inode_disk *disk_inode = malloc (sizeof *disk_inode);
+  block_read (fs_device, inode_get_inumber (inode), (void *)disk_inode);
+  return disk_inode;
+}
+/* Returns is_dir of INODE's data. */
+bool inode_is_dir (const struct inode *inode)
+{
+  ASSERT (inode != NULL);
+  struct inode_disk *disk_inode = get_inode_disk (inode);
+  bool is_dir = disk_inode->is_dir;
+  free (disk_inode);
+  return is_dir;
 }
 
 /* Reads an inode from SECTOR

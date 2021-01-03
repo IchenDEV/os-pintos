@@ -608,7 +608,7 @@ int process_read(int fd, void* buffer, unsigned size) {
 
 static int allocate_fd(void) { return thread_current()->next_fd++; }
 
-int process_open(const char* file_name) {
+int process_openfile(const char* file_name) {
   acquire_file_lock();
   struct file* f = filesys_open(file_name);
   release_file_lock();

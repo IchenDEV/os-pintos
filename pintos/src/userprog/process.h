@@ -16,7 +16,7 @@ int process_wait(pid_t);
 void process_exit(int status);
 void process_activate(void);
 void process_init(void);
-int process_open(const char* file_name);
+int process_openfile(const char* file_name);
 int process_write(int fd, const void* buffer, unsigned size);
 int process_read(int fd, void* buffer, unsigned length);
 void process_close(int fd);

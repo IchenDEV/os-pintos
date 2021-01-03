@@ -55,7 +55,18 @@ static bool is_valid_pointer(void* esp, uint8_t argc) {
   }
   return true;
 }
-
+static bool syscall_mkdir(const char* dir_name) {
+  acquire_file_lock();
+  bool successful = filesys_mkdir(dir_name);
+  release_file_lock();
+  return successful;
+}
+static bool syscall_chdir(const char* dir_name) {
+  acquire_file_lock();
+  bool successful = filesys_chdir(dir_name);
+  release_file_lock();
+  return successful;
+}
 static bool syscall_create(const char* file_name, unsigned initial_size) {
   acquire_file_lock();
   bool successful = filesys_create(file_name, initial_size);
@@ -199,7 +210,13 @@ static int syscall_open_wrapper(struct intr_frame* f) {
     return -1;
 
   char* str = *(char**)(f->esp + 4);
-  f->eax = process_open(str);
+  bool is_dir = filesys_is_dir(str);
+  if (is_dir) {
+    f->eax =filesys_chdir(str);
+  } else {
+    f->eax = process_openfile(str);
+  }
+
   return 0;
 }
 static int syscall_close_wrapper(struct intr_frame* f) {
@@ -259,6 +276,22 @@ static int syscall_filesize_wrapper(struct intr_frame* f) {
   return 0;
 }
 
+static int syscall_mkdir_wrapper(struct intr_frame* f) {
+  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4))) {
+    return -1;
+  }
+  char* str = *(char**)(f->esp + 4);
+  f->eax = syscall_mkdir(str);
+  return 0;
+}
+static int syscall_chdir_wrapper(struct intr_frame* f) {
+  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4))) {
+    return -1;
+  }
+  char* str = *(char**)(f->esp + 4);
+  f->eax = syscall_chdir(str);
+  return 0;
+}
 void syscall_init(void) {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
   syscall_handlers[SYS_WRITE] = &syscall_write_wrapper;
@@ -275,4 +308,7 @@ void syscall_init(void) {
   syscall_handlers[SYS_FILESIZE] = &syscall_filesize_wrapper;
   syscall_handlers[SYS_OPEN] = &syscall_open_wrapper;
   syscall_handlers[SYS_EXEC] = &syscall_exec_wrapper;
+
+  syscall_handlers[SYS_MKDIR] = &syscall_mkdir_wrapper;
+  syscall_handlers[SYS_CHDIR] = &syscall_chdir_wrapper;
 }
