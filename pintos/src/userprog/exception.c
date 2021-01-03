@@ -138,7 +138,6 @@ static void page_fault(struct intr_frame* f) {
   /* My Implementation */
   if (not_present || is_kernel_vaddr(fault_addr) && user) {
     thread_current()->exit_status = -1;
-    printf("%s: exit(%d)\n", &thread_current()->name, -1);
     thread_exit(-1);
   }
   /* == My Implementation */

@@ -12,6 +12,7 @@
 typedef int pid_t;
 static int (*syscall_handlers[20])(struct intr_frame*); /* Array of syscall functions */
 struct lock file_system_lock;
+
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
    Returns the byte value if successful, -1 if a segfault
@@ -19,7 +20,6 @@ struct lock file_system_lock;
 static int get_user(const uint8_t* uaddr) {
   if (!is_user_vaddr(uaddr))
     return -1;
-
   int result;
   asm("movl $1f, %0; movzbl %1, %0; 1:" : "=&a"(result) : "m"(*uaddr));
   return result;
@@ -48,34 +48,15 @@ static bool is_valid_string(void* str) {
 
 static bool is_valid_pointer(void* esp, uint8_t argc) {
   uint8_t i = 0;
-  for (; i < argc; ++i) {
-    if (get_user(((uint8_t*)esp) + i) == -1) {
+  for (; i < argc; ++i) 
+    if (get_user(((uint8_t*)esp) + i) == -1) 
       return false;
-    }
-  }
   return true;
 }
 
-static bool syscall_create(const char* file_name, unsigned initial_size) {
-  acquire_file_lock();
-  bool successful = filesys_create(file_name, initial_size);
-  release_file_lock();
-  return successful;
-}
-static bool syscall_remove(const char* file_name) {
-  bool successful = filesys_remove(file_name);
-  return successful;
-}
-
 static void kill_program(void) {
-  printf("%s: exit(%d)\n", &thread_current()->name, -1);
   thread_exit(-1);
 }
-static pid_t syscall_exec(const char* file_name) { return process_execute(file_name); }
-
-static void syscall_halt(void) { shutdown_power_off(); }
-
-static pid_t syscall_wait(pid_t pid) { return process_wait(pid); }
 
 static void syscall_handler(struct intr_frame* f UNUSED) {
 
@@ -100,37 +81,31 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
   int res = syscall_handlers[args[0]](f);
 
   if (res == -1) {
-
     kill_program();
     return;
   }
 }
 
-static void syscall_exit(int status) {
-  printf("%s: exit(%d)\n", &thread_current()->name, status);
-  thread_exit(status);
-}
-static int syscall_exit_wrapper(struct intr_frame* f) {
+static int syscall_exit(struct intr_frame* f) {
   int status;
-  if (is_valid_pointer(f->esp + 4, 4))
-    status = *((int*)f->esp + 1);
+  if (!is_valid_pointer(f->esp + 4, 4))
+      return -1;
   else
-    return -1;
-  syscall_exit(status);
+    status = *((int*)f->esp + 1);
+  thread_exit(status);
   return 0;
 }
-static int syscall_practice_wrapper(struct intr_frame* f) {
+static int syscall_practice(struct intr_frame* f) {
   int status;
-  if (is_valid_pointer(f->esp + 4, 4))
-    status = *((int*)f->esp + 1);
-  else
-    return -1;
+  if (!is_valid_pointer(f->esp + 4, 4))
+         return -1;
+  status = *((int*)f->esp + 1);
   int cx = *(int*)(f->esp + 4);
   f->eax = cx + 1;
   return 0;
 }
 
-static int syscall_write_wrapper(struct intr_frame* f) {
+static int syscall_write(struct intr_frame* f) {
   if (!is_valid_pointer(f->esp + 4, 12))
     return -1;
 
@@ -144,7 +119,7 @@ static int syscall_write_wrapper(struct intr_frame* f) {
   return 0;
 }
 
-static int syscall_read_wrapper(struct intr_frame* f) {
+static int syscall_read(struct intr_frame* f) {
   if (!is_valid_pointer(f->esp + 4, 12))
     return -1;
 
@@ -154,19 +129,19 @@ static int syscall_read_wrapper(struct intr_frame* f) {
 
   if (!is_valid_pointer(buffer, 1) || !is_valid_pointer(buffer + size, 1))
     return -1;
-  int written_size = process_read(fd, buffer, size);
-  f->eax = size;
+  int _size = process_read(fd, buffer, size);
+  f->eax = _size;
   return 0;
 }
 
-static int syscall_halt_wrapper(struct intr_frame* f UNUSED) {
-  syscall_halt();
+static int syscall_halt(struct intr_frame* f UNUSED) {
+shutdown_power_off();
   return 0;
 }
-static int syscall_seek_wrapper(struct intr_frame* f) {
-  if (!is_valid_pointer(f->esp + 4, 8)) {
+static int syscall_seek(struct intr_frame* f) {
+  if (!is_valid_pointer(f->esp + 4, 8)) 
     return -1;
-  }
+  
   int fd = *(int*)(f->esp + 4);
   unsigned pos = *(unsigned*)(f->esp + 8);
   acquire_file_lock();
@@ -175,26 +150,26 @@ static int syscall_seek_wrapper(struct intr_frame* f) {
   return 0;
 }
 
-static int syscall_tell_wrapper(struct intr_frame* f) {
-  if (!is_valid_pointer(f->esp + 4, 4)) {
+static int syscall_tell(struct intr_frame* f) {
+  if (!is_valid_pointer(f->esp + 4, 4)) 
     return -1;
-  }
+  
   int fd = *(int*)(f->esp + 4);
   acquire_file_lock();
   f->eax = process_tell(fd);
   release_file_lock();
   return 0;
 }
-static int syscall_wait_wrapper(struct intr_frame* f) {
+static int syscall_wait(struct intr_frame* f) {
   pid_t pid;
   if (is_valid_pointer(f->esp + 4, 4))
     pid = *((int*)f->esp + 1);
   else
     return -1;
-  f->eax = syscall_wait(pid);
+  f->eax = process_wait(pid);
   return 0;
 }
-static int syscall_open_wrapper(struct intr_frame* f) {
+static int syscall_open(struct intr_frame* f) {
   if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4)))
     return -1;
 
@@ -202,7 +177,7 @@ static int syscall_open_wrapper(struct intr_frame* f) {
   f->eax = process_open(str);
   return 0;
 }
-static int syscall_close_wrapper(struct intr_frame* f) {
+static int syscall_close(struct intr_frame* f) {
   if (!is_valid_pointer(f->esp + 4, 4))
     return -1;
 
@@ -210,30 +185,32 @@ static int syscall_close_wrapper(struct intr_frame* f) {
   process_close(fd);
   return 0;
 }
-static int syscall_create_wrapper(struct intr_frame* f) {
+static int syscall_create(struct intr_frame* f) {
   if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4)) ||
       !is_valid_pointer(f->esp + 8, 4)) {
     return -1;
   }
   char* str = *(char**)(f->esp + 4);
   unsigned size = *(int*)(f->esp + 8);
-  f->eax = syscall_create(str, size);
+  acquire_file_lock();
+  f->eax = filesys_create(str, size);
+  release_file_lock();
   return 0;
 }
-static int syscall_remove_wrapper(struct intr_frame* f) {
+static int syscall_remove(struct intr_frame* f) {
   if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4)))
     return -1;
 
   char* str = *(char**)(f->esp + 4);
   acquire_file_lock();
-  f->eax = syscall_remove(str);
+  f->eax = filesys_remove(str);
   release_file_lock();
   return 0;
 }
-static int syscall_exec_wrapper(struct intr_frame* f) {
-  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4))) {
+static int syscall_exec(struct intr_frame* f) {
+  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4))) 
     return -1;
-  }
+  
   char* str = *(char**)(f->esp + 4);
   // make sure the command string can fit into a page
   if (strlen(str) >= PGSIZE) {
@@ -245,11 +222,11 @@ static int syscall_exec_wrapper(struct intr_frame* f) {
     printf("the command string should be non-empty and doesn't start with a space %s\n", str);
     return -1;
   }
-  f->eax = syscall_exec(str);
+  f->eax = process_execute(str);
   return 0;
 }
 
-static int syscall_filesize_wrapper(struct intr_frame* f) {
+static int syscall_filesize(struct intr_frame* f) {
   if (!is_valid_pointer(f->esp + 4, 4))
     return -1;
   int fd = *(int*)(f->esp + 4);
@@ -261,18 +238,18 @@ static int syscall_filesize_wrapper(struct intr_frame* f) {
 
 void syscall_init(void) {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
-  syscall_handlers[SYS_WRITE] = &syscall_write_wrapper;
-  syscall_handlers[SYS_READ] = &syscall_read_wrapper;
-  syscall_handlers[SYS_HALT] = &syscall_halt_wrapper;
-  syscall_handlers[SYS_WAIT] = &syscall_wait_wrapper;
-  syscall_handlers[SYS_EXIT] = &syscall_exit_wrapper;
-  syscall_handlers[SYS_CREATE] = &syscall_create_wrapper;
-  syscall_handlers[SYS_REMOVE] = &syscall_remove_wrapper;
-  syscall_handlers[SYS_CLOSE] = &syscall_close_wrapper;
-  syscall_handlers[SYS_PRACTICE] = &syscall_practice_wrapper;
-  syscall_handlers[SYS_SEEK] = &syscall_seek_wrapper;
-  syscall_handlers[SYS_TELL] = &syscall_tell_wrapper;
-  syscall_handlers[SYS_FILESIZE] = &syscall_filesize_wrapper;
-  syscall_handlers[SYS_OPEN] = &syscall_open_wrapper;
-  syscall_handlers[SYS_EXEC] = &syscall_exec_wrapper;
+  syscall_handlers[SYS_WRITE] = &syscall_write;
+  syscall_handlers[SYS_READ] = &syscall_read;
+  syscall_handlers[SYS_HALT] = &syscall_halt;
+  syscall_handlers[SYS_WAIT] = &syscall_wait;
+  syscall_handlers[SYS_EXIT] = &syscall_exit;
+  syscall_handlers[SYS_CREATE] = &syscall_create;
+  syscall_handlers[SYS_REMOVE] = &syscall_remove;
+  syscall_handlers[SYS_CLOSE] = &syscall_close;
+  syscall_handlers[SYS_PRACTICE] = &syscall_practice;
+  syscall_handlers[SYS_SEEK] = &syscall_seek;
+  syscall_handlers[SYS_TELL] = &syscall_tell;
+  syscall_handlers[SYS_FILESIZE] = &syscall_filesize;
+  syscall_handlers[SYS_OPEN] = &syscall_open;
+  syscall_handlers[SYS_EXEC] = &syscall_exec;
 }

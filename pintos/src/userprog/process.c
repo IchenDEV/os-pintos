@@ -58,11 +58,11 @@ tid_t process_execute(const char* file_name) {
   }
   file_close(f);
   release_file_lock();
-  
+
   tid = thread_create(cmd_name, PRI_DEFAULT, start_process, fn_copy);
-  //父进程阻塞，等待子进程load完
 
   struct thread* t = thread_get(tid);
+
   if (tid == TID_ERROR) {
     palloc_free_page(fn_copy);
     free(cmd_name);
@@ -72,7 +72,6 @@ tid_t process_execute(const char* file_name) {
   t->next_fd = 2;
   t->prog_name = cmd_name;
   list_init(&t->files);
-
   return tid;
 }
 
@@ -151,12 +150,10 @@ int process_wait(tid_t child_tid) {
 /* Free the current process's resources. */
 void process_exit(int status) {
   struct thread* cur = thread_current();
-
   if (thread_tid() == 1) {
     return;
   }
-
-  //printf("%s: exit(%d)\n", status);
+  
   uint32_t* pd;
 
   /* Destroy the current process's page directory and switch back
@@ -174,6 +171,7 @@ void process_exit(int status) {
     pagedir_activate(NULL);
     pagedir_destroy(pd);
   }
+  printf("%s: exit(%d)\n", &cur->name, status);
 }
 
 /* Sets up the CPU for running user code in the current

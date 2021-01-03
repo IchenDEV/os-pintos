@@ -278,6 +278,7 @@ tid_t thread_tid(void) { return thread_current()->tid; }
 void thread_exit(int status) {
   ASSERT(!intr_context());
 
+
 #ifdef USERPROG
   process_exit(status);
 #endif
@@ -613,7 +614,6 @@ void blocked_thread_check(struct thread* t, void* aux UNUSED) {
     t->ticks_blocked--;
     if (t->ticks_blocked == 0) 
       thread_unblock(t);
-    
   }
 }
 /* Let thread hold a lock */
