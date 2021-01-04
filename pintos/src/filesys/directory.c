@@ -22,7 +22,7 @@ struct dir_entry {
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool dir_create(block_sector_t sector, size_t entry_cnt) {
-  return inode_create(sector, entry_cnt * sizeof(struct dir_entry));
+  return inode_create(sector, entry_cnt * sizeof(struct dir_entry),true);
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -124,10 +124,15 @@ bool dir_add(struct dir* dir, const char* name, block_sector_t inode_sector) {
   if (*name == '\0' || strlen(name) > NAME_MAX)
     return false;
 
+
+
   /* Check that NAME is not in use. */
   if (lookup(dir, name, NULL, NULL))
     goto done;
-
+    
+  /* set parent of added file to this dir */
+  if (!inode_set_parent(inode_get_inumber(dir_get_inode(dir)), inode_sector))
+    goto done;
   /* Set OFS to offset of free slot.
      If there are no free slots, then it will be set to the
      current end-of-file.
@@ -198,4 +203,36 @@ bool dir_readdir(struct dir* dir, char name[NAME_MAX + 1]) {
     }
   }
   return false;
+}
+
+bool dir_is_root(struct dir* dir)
+{
+  if (dir != NULL && inode_get_inumber(dir_get_inode(dir)) == ROOT_DIR_SECTOR)
+    return true;
+  else
+    return false;
+} 
+
+struct inode* dir_parent_inode(struct dir* dir)
+{
+  if(dir == NULL) return NULL;
+  
+  block_sector_t sector = inode_get_parent(dir_get_inode(dir));
+  return inode_open(sector);
+}
+
+bool dir_is_empty (struct inode *inode)
+{
+  struct dir_entry e;
+  off_t pos = 0;
+
+  while (inode_read_at (inode, &e, sizeof e, pos) == sizeof e) 
+  {
+    pos += sizeof e;
+    if (e.in_use)
+    {
+      return false;
+    }
+  }
+  return true;
 }

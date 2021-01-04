@@ -13,8 +13,10 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/fixed-point.h"
+
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "filesys/directory.h"
 #endif
 fixed_t load_avg;
 
@@ -183,6 +185,7 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   /* Initialize thread. */
   init_thread(t, name, priority);
   tid = t->tid = allocate_tid();
+
 #ifdef USERPROG
   //初始化孩子元素
   t->pointer_as_child_thread = malloc(sizeof(struct as_child_thread));
@@ -191,6 +194,11 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   t->pointer_as_child_thread->bewaited = false;
   sema_init(&t->pointer_as_child_thread->sema, 0);
   list_push_back(&thread_current()->children, &t->pointer_as_child_thread->child_thread_elem);
+
+  if (thread_current()->dir)
+    t->dir = dir_reopen(thread_current()->dir);
+  else
+    t->dir = NULL;
 #endif
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame(t, sizeof *kf);
@@ -278,7 +286,6 @@ tid_t thread_tid(void) { return thread_current()->tid; }
 void thread_exit(int status) {
   ASSERT(!intr_context());
 
-
 #ifdef USERPROG
   process_exit(status);
 #endif
@@ -288,7 +295,7 @@ void thread_exit(int status) {
      when it calls thread_schedule_tail(). */
   intr_disable();
 
-#ifdef USERPROG  //信号量加上
+#ifdef USERPROG //信号量加上
   thread_current()->pointer_as_child_thread->exit_status = status;
   sema_up(&thread_current()->pointer_as_child_thread->sema);
 
@@ -465,7 +472,9 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   load_avg = FP_CONST(0);
   t->magic = THREAD_MAGIC;
   t->ticks_blocked = 0;
+ 
 #ifdef USERPROG
+  t->dir = NULL;
   list_init(&t->children);
   list_init(&t->files);
   sema_init(&t->exec_sema, 0);
@@ -612,7 +621,7 @@ struct thread* thread_get(tid_t tid) {
 void blocked_thread_check(struct thread* t, void* aux UNUSED) {
   if (t->status == THREAD_BLOCKED && t->ticks_blocked > 0) {
     t->ticks_blocked--;
-    if (t->ticks_blocked == 0) 
+    if (t->ticks_blocked == 0)
       thread_unblock(t);
   }
 }

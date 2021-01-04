@@ -48,15 +48,13 @@ static bool is_valid_string(void* str) {
 
 static bool is_valid_pointer(void* esp, uint8_t argc) {
   uint8_t i = 0;
-  for (; i < argc; ++i) 
-    if (get_user(((uint8_t*)esp) + i) == -1) 
+  for (; i < argc; ++i)
+    if (get_user(((uint8_t*)esp) + i) == -1)
       return false;
   return true;
 }
 
-static void kill_program(void) {
-  thread_exit(-1);
-}
+static void kill_program(void) { thread_exit(-1); }
 
 static void syscall_handler(struct intr_frame* f UNUSED) {
 
@@ -89,7 +87,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 static int syscall_exit(struct intr_frame* f) {
   int status;
   if (!is_valid_pointer(f->esp + 4, 4))
-      return -1;
+    return -1;
   else
     status = *((int*)f->esp + 1);
   thread_exit(status);
@@ -98,7 +96,7 @@ static int syscall_exit(struct intr_frame* f) {
 static int syscall_practice(struct intr_frame* f) {
   int status;
   if (!is_valid_pointer(f->esp + 4, 4))
-         return -1;
+    return -1;
   status = *((int*)f->esp + 1);
   int cx = *(int*)(f->esp + 4);
   f->eax = cx + 1;
@@ -135,13 +133,13 @@ static int syscall_read(struct intr_frame* f) {
 }
 
 static int syscall_halt(struct intr_frame* f UNUSED) {
-shutdown_power_off();
+  shutdown_power_off();
   return 0;
 }
 static int syscall_seek(struct intr_frame* f) {
-  if (!is_valid_pointer(f->esp + 4, 8)) 
+  if (!is_valid_pointer(f->esp + 4, 8))
     return -1;
-  
+
   int fd = *(int*)(f->esp + 4);
   unsigned pos = *(unsigned*)(f->esp + 8);
   acquire_file_lock();
@@ -151,9 +149,9 @@ static int syscall_seek(struct intr_frame* f) {
 }
 
 static int syscall_tell(struct intr_frame* f) {
-  if (!is_valid_pointer(f->esp + 4, 4)) 
+  if (!is_valid_pointer(f->esp + 4, 4))
     return -1;
-  
+
   int fd = *(int*)(f->esp + 4);
   acquire_file_lock();
   f->eax = process_tell(fd);
@@ -193,7 +191,7 @@ static int syscall_create(struct intr_frame* f) {
   char* str = *(char**)(f->esp + 4);
   unsigned size = *(int*)(f->esp + 8);
   acquire_file_lock();
-  f->eax = filesys_create(str, size);
+  f->eax = filesys_create(str, size, false);
   release_file_lock();
   return 0;
 }
@@ -208,9 +206,9 @@ static int syscall_remove(struct intr_frame* f) {
   return 0;
 }
 static int syscall_exec(struct intr_frame* f) {
-  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4))) 
+  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4)))
     return -1;
-  
+
   char* str = *(char**)(f->esp + 4);
   // make sure the command string can fit into a page
   if (strlen(str) >= PGSIZE) {
@@ -236,6 +234,24 @@ static int syscall_filesize(struct intr_frame* f) {
   return 0;
 }
 
+static int syscall_mkdir(struct intr_frame* f) {
+  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4)))
+    return -1;
+  char* str = *(char**)(f->esp + 4);
+  acquire_file_lock();
+  f->eax = filesys_create(str, 0, false);
+  release_file_lock();
+  return 0;
+}
+static int syscall_chdir(struct intr_frame* f) {
+  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4)))
+    return -1;
+  char* str = *(char**)(f->esp + 4);
+  acquire_file_lock();
+  f->eax = filesys_chdir(str);
+  release_file_lock();
+  return 0;
+}
 void syscall_init(void) {
   intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
   syscall_handlers[SYS_WRITE] = &syscall_write;
@@ -252,4 +268,7 @@ void syscall_init(void) {
   syscall_handlers[SYS_FILESIZE] = &syscall_filesize;
   syscall_handlers[SYS_OPEN] = &syscall_open;
   syscall_handlers[SYS_EXEC] = &syscall_exec;
+
+  syscall_handlers[SYS_MKDIR] = &syscall_mkdir;
+  syscall_handlers[SYS_CHDIR] = &syscall_chdir;
 }

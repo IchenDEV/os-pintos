@@ -153,7 +153,7 @@ void process_exit(int status) {
   if (thread_tid() == 1) {
     return;
   }
-  
+
   uint32_t* pd;
 
   /* Destroy the current process's page directory and switch back
@@ -582,7 +582,10 @@ int process_write(int fd, const void* buffer, unsigned size) {
     putbuf((char*)buffer, (size_t)size);
     return (int)size;
   } else if (get_fd_entry(fd) != NULL) {
+    if (inode_is_dir(file_get_inode(get_fd_entry(fd)->file)))
+      return -1; // ADDED: cannot write to dir
     acquire_file_lock();
+
     int si = file_write(get_fd_entry(fd)->file, buffer, size);
     release_file_lock();
     return si;
