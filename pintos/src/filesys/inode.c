@@ -18,7 +18,7 @@ struct inode_disk {
   unsigned magic;       /* Magic number. */
   bool is_dir;
   block_sector_t parent;
-  uint32_t unused[125-2]; /* Not used. */
+  uint32_t unused[125 - 2]; /* Not used. */
 };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -27,11 +27,11 @@ static inline size_t bytes_to_sectors(off_t size) { return DIV_ROUND_UP(size, BL
 
 /* In-memory inode. */
 struct inode {
-  struct list_elem elem;  /* Element in inode list. */
-  block_sector_t sector;  /* Sector number of disk location. */
-  int open_cnt;           /* Number of openers. */
-  bool removed;           /* True if deleted, false otherwise. */
-  int deny_write_cnt;     /* 0: writes ok, >0: deny writes. */
+  struct list_elem elem; /* Element in inode list. */
+  block_sector_t sector; /* Sector number of disk location. */
+  int open_cnt;          /* Number of openers. */
+  bool removed;          /* True if deleted, false otherwise. */
+  int deny_write_cnt;    /* 0: writes ok, >0: deny writes. */
 
   struct inode_disk data; /* Inode content. */
 };
@@ -53,14 +53,17 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
 static struct list open_inodes;
 
 /* Initializes the inode module. */
-void inode_init(void) { list_init(&open_inodes); }
+void inode_init(void) {
+  ASSERT(BLOCK_SECTOR_SIZE == sizeof(struct inode_disk));
+  list_init(&open_inodes);
+}
 
 /* Initializes an inode with LENGTH bytes of data and
    writes the new inode to sector SECTOR on the file system
    device.
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
-bool inode_create(block_sector_t sector, off_t length,bool is_dir) {
+bool inode_create(block_sector_t sector, off_t length, bool is_dir) {
   struct inode_disk* disk_inode = NULL;
   bool success = false;
 
@@ -74,7 +77,7 @@ bool inode_create(block_sector_t sector, off_t length,bool is_dir) {
   if (disk_inode != NULL) {
     size_t sectors = bytes_to_sectors(length);
     disk_inode->length = length;
-    disk_inode->is_dir =is_dir;
+    disk_inode->is_dir = is_dir;
     disk_inode->parent = ROOT_DIR_SECTOR;
     disk_inode->magic = INODE_MAGIC;
     if (free_map_allocate(sectors, &disk_inode->start)) {
@@ -212,6 +215,8 @@ off_t inode_read_at(struct inode* inode, void* buffer_, off_t size, off_t offset
   return bytes_read;
 }
 
+
+
 /* Writes SIZE bytes from BUFFER into INODE, starting at OFFSET.
    Returns the number of bytes actually written, which may be
    less than SIZE if end of file is reached or an error occurs.
@@ -224,6 +229,14 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
 
   if (inode->deny_write_cnt)
     return 0;
+
+  //ADDED
+  /* beyond EOF, need extend */
+  // if(offset + size > inode_length(inode))
+  // {
+  //   inode->length = inode_grow(inode, offset + size);
+  // }
+
 
   while (size > 0) {
     /* Sector to write, starting byte offset within sector. */
@@ -288,20 +301,11 @@ void inode_allow_write(struct inode* inode) {
   inode->deny_write_cnt--;
 }
 
-bool
-inode_is_dir (const struct inode *inode)
-{
-  return inode->data.is_dir;
-}
+bool inode_is_dir(const struct inode* inode) { return inode->data.is_dir; }
 
-
-block_sector_t
-inode_get_parent (const struct inode *inode)
-{
-  return inode->data.parent;
-}
-bool inode_set_parent (block_sector_t parent, block_sector_t child)
-{
+block_sector_t inode_get_parent(const struct inode* inode) { return inode->data.parent; }
+bool inode_set_parent(block_sector_t parent, block_sector_t child) {
+ // printf("%d -> %d\n",child,parent);
   struct inode* inode = inode_open(child);
 
   if (!inode)

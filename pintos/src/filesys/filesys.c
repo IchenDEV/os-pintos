@@ -8,7 +8,6 @@
 #include "filesys/directory.h"
 #include "threads/thread.h"
 #include "threads/malloc.h"
-#include "filesys/cache.h"
 
 /* Partition that contains the file system. */
 struct block* fs_device;
@@ -21,7 +20,7 @@ void filesys_init(bool format) {
   fs_device = block_get_role(BLOCK_FILESYS);
   if (fs_device == NULL)
     PANIC("No file system device found, can't initialize file system.");
- // init_cache();
+  // init_cache();
   inode_init();
   free_map_init();
 
@@ -39,19 +38,26 @@ void filesys_done(void) { free_map_close(); }
    Returns true if successful, false otherwise.
    Fails if a file named NAME already exists,
    or if internal memory allocation fails. */
-bool filesys_create(const char* name, off_t initial_size,bool is_dir) {
+bool filesys_create(const char* name, off_t initial_size, bool is_dir) {
   block_sector_t inode_sector = 0;
 
   struct dir* dir = dir_get_from_path(name);
   char* file_name = path_final_name(name);
 
-  bool success =
-      (dir != NULL && free_map_allocate(1, &inode_sector) &&
-       inode_create(inode_sector, initial_size,is_dir) && dir_add(dir, file_name, inode_sector));
+  bool success = false;
+  if (is_dir) {
+    success = (dir != NULL && free_map_allocate(1, &inode_sector) && dir_create(inode_sector, 1) &&
+               dir_add(dir, file_name, inode_sector));
+  } else {
+    success = dir != NULL && free_map_allocate(1, &inode_sector);
+    success = success && inode_create(inode_sector, initial_size > 0 ? initial_size : 1, is_dir);
+    success = success && dir_add(dir, file_name, inode_sector);
+  }
+
   if (!success && inode_sector != 0)
     free_map_release(inode_sector, 1);
   dir_close(dir);
- free(file_name);
+  free(file_name);
   return success;
 }
 
@@ -72,24 +78,30 @@ struct file* filesys_open(const char* name) {
     if (strcmp(file_name, "..") == 0) {
       inode = dir_parent_inode(dir);
       if (!inode) {
+
         free(file_name);
         return NULL;
       }
     } else if ((dir_is_root(dir) && strlen(file_name) == 0) || strcmp(file_name, ".") == 0) {
       free(file_name);
+
       return (struct file*)dir;
     } else
       dir_lookup(dir, file_name, &inode);
   }
 
+  if (!inode) {
+    // printf("%s not find\n", file_name);
+    return NULL;
+  }
+
   free(file_name);
   dir_close(dir);
 
-  if (!inode)
-    return NULL;
-
-  if (inode_is_dir(inode))
+  if (inode_is_dir(inode)) {
+    // printf("open dir");
     return (struct file*)dir_open(inode);
+  }
 
   return file_open(inode);
 }
@@ -140,6 +152,7 @@ bool filesys_chdir(const char* path) {
 
   if (dir == NULL) {
     free(name);
+    // printf("No file");
     return false;
   } else {
     dir_close(thread_current()->dir);
@@ -188,6 +201,7 @@ struct dir* dir_get_from_path(const char* path_name) {
   prev = strtok_r(path, "/", &ptr);
   for (cur = strtok_r(NULL, "/", &ptr); cur != NULL; prev = cur, cur = strtok_r(NULL, "/", &ptr)) {
     struct inode* inode;
+
     if (strcmp(prev, ".") == 0)
       continue;
     else if (strcmp(prev, "..") == 0) {
@@ -203,6 +217,5 @@ struct dir* dir_get_from_path(const char* path_name) {
     } else
       inode_close(inode);
   }
-
   return dir;
 }

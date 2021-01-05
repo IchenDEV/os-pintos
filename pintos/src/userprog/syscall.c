@@ -239,7 +239,7 @@ static int syscall_mkdir(struct intr_frame* f) {
     return -1;
   char* str = *(char**)(f->esp + 4);
   acquire_file_lock();
-  f->eax = filesys_create(str, 0, false);
+  f->eax = filesys_create(str, 0, true);
   release_file_lock();
   return 0;
 }

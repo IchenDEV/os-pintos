@@ -309,7 +309,12 @@ void thread_exit(int status) {
     e = list_pop_front(files);
     struct opened_file* f = list_entry(e, struct opened_file, file_elem);
     acquire_file_lock();
+     if (inode_is_dir(file_get_inode(f->file))){
+       dir_close(f->file);
+     }else{
     file_close(f->file);
+     }
+
     release_file_lock();
     list_remove(e);
     free(f);
