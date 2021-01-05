@@ -17,6 +17,7 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #include "filesys/directory.h"
+#include "filesys/file.h"
 #endif
 fixed_t load_avg;
 
@@ -310,7 +311,7 @@ void thread_exit(int status) {
     struct opened_file* f = list_entry(e, struct opened_file, file_elem);
     acquire_file_lock();
      if (inode_is_dir(file_get_inode(f->file))){
-       dir_close(f->file);
+       dir_close((struct dir *)f->file);
      }else{
     file_close(f->file);
      }

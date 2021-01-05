@@ -171,7 +171,7 @@ void process_exit(int status) {
     pagedir_activate(NULL);
     pagedir_destroy(pd);
   }
-  printf("%s: exit(%d)\n", &cur->name, status);
+  printf("%s: exit(%d)\n", (char *)&cur->name, status);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -565,7 +565,6 @@ struct fd_entry {
 
 static struct fd_entry* get_fd_entry(int fd) {
   struct list_elem* e;
-  struct fd_entry* fe = NULL;
   struct list* fd_table = &thread_current()->files;
 
   for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {

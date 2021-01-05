@@ -72,7 +72,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
   }
   uint32_t* args = ((uint32_t*)f->esp);
 
-  if (args[0] < 0 || args[0] >= 20) {
+  if (args[0] >= 20) {
     kill_program();
     return;
   }
@@ -94,10 +94,8 @@ static int syscall_exit(struct intr_frame* f) {
   return 0;
 }
 static int syscall_practice(struct intr_frame* f) {
-  int status;
   if (!is_valid_pointer(f->esp + 4, 4))
     return -1;
-  status = *((int*)f->esp + 1);
   int cx = *(int*)(f->esp + 4);
   f->eax = cx + 1;
   return 0;

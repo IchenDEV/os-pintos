@@ -12,7 +12,7 @@
 typedef int pid_t;
 
 pid_t process_execute(const char* file_name);
-int process_wait(pid_t);
+int process_wait(tid_t child_tid);
 void process_exit(int status);
 void process_activate(void);
 void process_init(void);

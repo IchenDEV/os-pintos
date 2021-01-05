@@ -183,11 +183,19 @@ int thread_get_nice(void);
 void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
+void thread_donate_priority(struct thread* t);
+void thread_update_priority(struct thread* t);
 
 #ifdef USERPROG
 /* Owned by userprog/process.c. */
 struct thread* thread_get(tid_t tid);
 bool thread_is_parent_of(tid_t tid);
+
+void acquire_file_lock(void);
+void release_file_lock(void);
 #endif
+void thread_mlfqs_increase_recent_cpu_by_one(void);
+void thread_mlfqs_update_load_avg_and_recent_cpu(void);
+void thread_mlfqs_update_priority(struct thread* t);
 
 #endif /* threads/thread.h */
