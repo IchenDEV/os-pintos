@@ -28,16 +28,30 @@
 
 条件变量也维护了一个waiters用于存储等待接受条件变量的线程，那么就修改cond_signal（）函数唤醒优先级最高的线程即可，
 
-## Task3
-实现多级反馈队列调度算法
-编写下面的文件fixed-point.h
+## Task3 实现多级反馈队列调度算法
 
-1. 该算法的优先级是动态变化的，主要动态修改Niceness, Priority, recent_cpu, load_avg四大变量
+查阅资料发现目前pintos不支持浮点数运算，所以编写fixed-point.h，添加对浮点数运算对基本支持,实现最基本对加减乘除功能。
 
-2. Priority的计算公式为：priority= PRI_MAX - (recent_cpu/ 4) - (nice*2)，每四个clock tick对所有线程更新一次
+该算法的优先级是动态变化的，主要动态修改Niceness, Priority, recent_cpu, load_avg
 
-3. recent_cpu的计算公式为recent_cpu= (2*load_avg)/(2*load_avg+ 1) *recent_cpu+nice，当timer_ticks () % TIMER_FREQ == 0时对所有线程更新，每个tick对当前线程的recent_cpu加1。
+Priority的计算公式为：priority= PRI_MAX - (recent_cpu/ 4) - (nice*2)，每四个tick更新一次
 
-4. load_avg的计算公式为load_avg= (59/60)*load_avg+ (1/60)*ready_threads，当timer_ticks () % TIMER_FREQ == 0时对所有线程更新
+recent_cpu的计算公式为recent_cpu= (2*load_avg)/(2*load_avg+ 1) *recent_cpu+nice，当timer_ticks () % TIMER_FREQ == 0时对所有线程更新，每个tick对当前线程的recent_cpu加1。
 
-接下来就是在每次中断时对这些值进行更新，修改timer.c文件
+load_avg的计算公式为load_avg= (59/60)*load_avg+ (1/60)*ready_threads，当timer_ticks () % TIMER_FREQ == 0时对所有线程更新
+
+接下来就是在每次中断时对这些值进行更新，修改timer.c文件,在`timer_interrupt`中加入对mlfqs相关值对计算，修改如下：
+
+```c
+static void timer_interrupt(......) {
+  ......
+  if (thread_mlfqs) {
+    thread_mlfqs_increase_recent_cpu_by_one();
+    if (ticks % TIMER_FREQ == 0)
+      thread_mlfqs_update_load_avg_and_recent_cpu();
+    else if (ticks % 4 == 0)
+      thread_mlfqs_update_priority(thread_current());
+  }
+ .....
+}
+```

@@ -139,31 +139,14 @@ exec 就要新建立一个进程，显然要调用`process_execute`，并且需�
 ### 包装和用户空间判断
 
 为了方便，对 SystemCall 处理函数进行了一些封装
-同时要确保用户程序所提供的地址在用户程序的空间，要对其进行检测和处理
-
-```c
-/* Reads a byte at user virtual address UADDR.
-   UADDR must be below PHYS_BASE.
-   Returns the byte value if successful, -1 if a segfault
-   occurred. */
-static int get_user(const uint8_t* uaddr) {
-  if (!is_user_vaddr(uaddr))
-    return -1;
-  int result;
-  asm("movl $1f, %0; movzbl %1, %0; 1:" : "=&a"(result) : "m"(*uaddr));
-  return result;
-}
-```
+同时要确保用户程序所提供的地址在用户程序的空间，要对其进行检测和处理，通过`get_user`函数判断空间是不是在用户空间。同时因该要检测如果是字符串输入字符串是不是合法（'\0'结尾），故设计如下函数进行判断：
 
 ```c
 static bool is_valid_string(void* str) {
   int ch = -1;
-  while ((ch = get_user((uint8_t*)str++)) != '\0' && ch != -1)
-    ;
-  if (ch == '\0')
-    return true;
-  else
-    return false;
+  while ((ch = get_user((uint8_t*)str++)) != '\0' && ch != -1);
+  if (ch == '\0')return true;
+  else return false;
 }
 ```
 
@@ -171,7 +154,7 @@ static bool is_valid_string(void* str) {
 
 ### System Call: bool create (const char \*file, unsigned initial size)
 
-`filesys_create` 函数已经初步实现了，所以产生 create 的`systemcall`尝试调用`filesys_create`创建文件
+`filesys_create` 函数已经初步实现了，所以产生 create 的`systemcall`直接尝试调用`filesys_create`创建文件
 
 ### System Call: bool remove (const char \*file)
 
@@ -179,24 +162,27 @@ static bool is_valid_string(void* str) {
 
 ### System Call: int open (const char \*file)
 
-`filesys_open` 函数已经初步实现了，所以产生 create 的`systemcall`尝试调用`filesys_open`打开文件
+`filesys_open` 函数已经初步实现了，所以产生 create 的`systemcall`尝试调用`filesys_open`打开文件。由于要实现锁和打开后对读写操作，所以要将打开对文件加到线程维护对打开文件数组里。分配fd和添加到list代码如下：
+
+```c
+struct fd_entry* fd_entry = malloc(sizeof(struct fd_entry));
+if (fd_entry == NULL) return -1;
+fd_entry->fd = allocate_fd();
+fd_entry->file = f;
+list_push_back(&thread_current()->files, &fd_entry->elem);
+```
 
 ### Get file from fd
 
-```c
-static struct fd_entry* get_fd_entry(int fd) {
-  struct list_elem* e;
-  struct fd_entry* fe = NULL;
-  struct list* fd_table = &thread_current()->files;
+从fd获得file需要遍历线程到file到list，来获得entry，代码如下
 
+```c
+  struct list* fd_table = &thread_current()->files;
   for (e = list_begin(fd_table); e != list_end(fd_table); e = list_next(e)) {
     struct fd_entry* tmp = list_entry(e, struct fd_entry, elem);
     if (tmp->fd == fd)
       return tmp;
   }
-
-  return NULL;
-}
 ```
 
 ### System Call: int read (int fd, void \*buffer, unsigned size)
@@ -243,7 +229,11 @@ int process_write(int fd, const void* buffer, unsigned size) {
 
 ### System Call: void close (int fd)
 
-在文件系统中 pintos 的`filesys_close` 函数已经初步实现了，和前几个一样调用函数，并传回返回值到 eax
+在文件系统中 pintos 的`filesys_close` 函数已经初步实现了，和前几个一样调用函数，并传回返回值到 eax。同时也要将文件从线程到file的list中删除，以释放。
+
+```c
+     list_remove(&fd_entry->elem);
+```
 
 ### 读写同步问题
 
