@@ -19,6 +19,6 @@ bool filesys_remove(const char* name);
 bool filesys_chdir (const char *name);
 
 struct dir* dir_get_from_path(const char* path_name);
-char* path_final_name(const char* path_name) ;
+bool split_directory_and_filename(const char* path, char* directory, char* filename) ;
 
 #endif /* filesys/filesys.h */

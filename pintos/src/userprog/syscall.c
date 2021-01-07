@@ -71,7 +71,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     return;
   }
   uint32_t* args = ((uint32_t*)f->esp);
-
   if (args[0] >= 20) {
     kill_program();
     return;
@@ -193,9 +192,36 @@ static int syscall_create(struct intr_frame* f) {
   release_file_lock();
   return 0;
 }
-static int syscall_remove(struct intr_frame* f) {
-  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4)))
+static int syscall_readdir(struct intr_frame* f) {
+  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 8)) ||
+      !is_valid_pointer(f->esp + 8, 4)) {
     return -1;
+  }
+  int fd = *(int*)(f->esp + 4);
+  char* name = *(char**)(f->esp + 8);
+  f->eax = process_readdir(fd, name);
+  return 0;
+}
+static int syscall_inumber(struct intr_frame* f) {
+  if (!is_valid_pointer(f->esp + 4, 4)) {
+    return -1;
+  }
+  int fd = *(int*)(f->esp + 4);
+  f->eax = process_inumber(fd);
+  return 0;
+}
+static int syscall_isdir(struct intr_frame* f) {
+  if (!is_valid_pointer(f->esp + 4, 4)) {
+    return -1;
+  }
+  int fd = *(int*)(f->esp + 4);
+  f->eax = process_isdir(fd);
+  return 0;
+}
+static int syscall_remove(struct intr_frame* f) {
+  if (!is_valid_pointer(f->esp + 4, 4) || !is_valid_string(*(char**)(f->esp + 4))) {
+    return -1;
+  }
 
   char* str = *(char**)(f->esp + 4);
   acquire_file_lock();
@@ -269,4 +295,7 @@ void syscall_init(void) {
 
   syscall_handlers[SYS_MKDIR] = &syscall_mkdir;
   syscall_handlers[SYS_CHDIR] = &syscall_chdir;
+  syscall_handlers[SYS_READDIR] = &syscall_readdir;
+  syscall_handlers[SYS_ISDIR] = &syscall_isdir;
+  syscall_handlers[SYS_INUMBER] = &syscall_inumber;
 }

@@ -36,12 +36,11 @@ void dir_close(struct dir*);
 struct inode* dir_get_inode(struct dir*);
 
 bool dir_is_root(struct dir* dir);
-struct inode* dir_parent_inode(struct dir* dir);
-bool dir_is_empty (struct inode *inode);
+bool dir_is_empty (struct dir *dir);
 
 /* Reading and writing. */
 bool dir_lookup(const struct dir*, const char* name, struct inode**);
-bool dir_add(struct dir*, const char* name, block_sector_t);
+bool dir_add(struct dir*, const char* name, block_sector_t,bool is_dir);
 bool dir_remove(struct dir*, const char* name);
 bool dir_readdir(struct dir*, char name[NAME_MAX + 1]);
 

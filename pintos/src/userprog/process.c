@@ -604,8 +604,33 @@ int process_read(int fd, void* buffer, unsigned size) {
   }
   return -1;
 }
-// File descriptor manager
-
+int process_isdir(int fd) {
+ if (get_fd_entry(fd) != NULL) {
+    acquire_file_lock();
+    int si = inode_is_dir(file_get_inode(get_fd_entry(fd)->file));
+    release_file_lock();
+    return si;
+  }
+  return -1;
+}
+int process_inumber(int fd) {
+ if (get_fd_entry(fd) != NULL) {
+    acquire_file_lock();
+    int si = inode_get_inumber(file_get_inode(get_fd_entry(fd)->file));
+    release_file_lock();
+    return si;
+  }
+  return -1;
+}
+int process_readdir(int fd, char* name) {
+if (get_fd_entry(fd) != NULL) {
+    acquire_file_lock();
+    int si = dir_readdir(file_get_inode(get_fd_entry(fd)->file),name);
+    release_file_lock();
+    return si;
+  }
+  return -1;
+}
 static int allocate_fd(void) { return thread_current()->next_fd++; }
 
 int process_open(const char* file_name) {
