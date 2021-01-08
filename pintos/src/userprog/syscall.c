@@ -158,7 +158,7 @@ static int syscall_tell(struct intr_frame* f) {
 static int syscall_wait(struct intr_frame* f) {
   pid_t pid;
   if (is_valid_pointer(f->esp + 4, 4))
-    pid = *((int*)f->esp + 1);
+    pid = *((int*)f->esp + 4);
   else
     return -1;
   f->eax = process_wait(pid);

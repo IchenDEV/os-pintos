@@ -297,9 +297,6 @@ void thread_exit(int status) {
   intr_disable();
 
 #ifdef USERPROG //信号量加上
-  thread_current()->pointer_as_child_thread->exit_status = status;
-  sema_up(&thread_current()->pointer_as_child_thread->sema);
-
   //关闭可执行文件，间接允许了对该可执行文件进行修改（file_allow_write）
   file_close(thread_current()->executable);
   // 关闭所有打开的文件
@@ -310,18 +307,24 @@ void thread_exit(int status) {
     e = list_pop_front(files);
     struct opened_file* f = list_entry(e, struct opened_file, file_elem);
     acquire_file_lock();
-     if (inode_is_dir(file_get_inode(f->file))){
-       dir_close((struct dir *)f->file);
-     }else{
-    file_close(f->file);
-     }
+    if (inode_is_dir(file_get_inode(f->file))) {
+      dir_close((struct dir*)f->file);
+    } else {
+      file_close(f->file);
+    }
 
     release_file_lock();
     list_remove(e);
     free(f);
   }
+
 #endif
   list_remove(&thread_current()->allelem);
+
+#ifdef USERPROG //信号量加上
+  thread_current()->pointer_as_child_thread->exit_status = status;
+  sema_up(&thread_current()->pointer_as_child_thread->sema);
+#endif
   thread_current()->status = THREAD_DYING;
   schedule();
   NOT_REACHED();
@@ -478,7 +481,7 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   load_avg = FP_CONST(0);
   t->magic = THREAD_MAGIC;
   t->ticks_blocked = 0;
- 
+
 #ifdef USERPROG
   t->dir = NULL;
   list_init(&t->children);

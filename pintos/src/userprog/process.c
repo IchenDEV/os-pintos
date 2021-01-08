@@ -44,7 +44,6 @@ tid_t process_execute(const char* file_name) {
   char* cmd_name = malloc(strlen(fn_copy) + 1);
   if (cmd_name == NULL)
     return TID_ERROR;
-
   extract_command_name(fn_copy, cmd_name);
 
   /* Create a new thread to execute FILE_NAME. */
@@ -58,7 +57,6 @@ tid_t process_execute(const char* file_name) {
   }
   file_close(f);
   release_file_lock();
-
   tid = thread_create(cmd_name, PRI_DEFAULT, start_process, fn_copy);
 
   struct thread* t = thread_get(tid);
@@ -68,10 +66,6 @@ tid_t process_execute(const char* file_name) {
     free(cmd_name);
     return TID_ERROR;
   }
-
-  t->next_fd = 2;
-  t->prog_name = cmd_name;
-  list_init(&t->files);
   return tid;
 }
 
@@ -171,7 +165,7 @@ void process_exit(int status) {
     pagedir_activate(NULL);
     pagedir_destroy(pd);
   }
-  printf("%s: exit(%d)\n", (char *)&cur->name, status);
+  printf("%s: exit(%d)\n", (char*)&cur->name, status);
 }
 
 /* Sets up the CPU for running user code in the current
@@ -605,7 +599,7 @@ int process_read(int fd, void* buffer, unsigned size) {
   return -1;
 }
 int process_isdir(int fd) {
- if (get_fd_entry(fd) != NULL) {
+  if (get_fd_entry(fd) != NULL) {
     acquire_file_lock();
     int si = inode_is_dir(file_get_inode(get_fd_entry(fd)->file));
     release_file_lock();
@@ -614,7 +608,7 @@ int process_isdir(int fd) {
   return -1;
 }
 int process_inumber(int fd) {
- if (get_fd_entry(fd) != NULL) {
+  if (get_fd_entry(fd) != NULL) {
     acquire_file_lock();
     int si = inode_get_inumber(file_get_inode(get_fd_entry(fd)->file));
     release_file_lock();
@@ -623,9 +617,9 @@ int process_inumber(int fd) {
   return false;
 }
 int process_readdir(int fd, char* name) {
-if (get_fd_entry(fd) != NULL) {
+  if (get_fd_entry(fd) != NULL) {
     acquire_file_lock();
-    bool si = dir_readdir((struct dir*)(get_fd_entry(fd)->file),name);
+    bool si = dir_readdir((struct dir*)(get_fd_entry(fd)->file), name);
     release_file_lock();
     return si;
   }

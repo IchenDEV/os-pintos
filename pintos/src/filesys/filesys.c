@@ -90,7 +90,7 @@ struct file* filesys_open(const char* name) {
   if (dir == NULL)
     return NULL;
 
-  if (strlen(filename) == 0||strcmp(filename,".")==0)
+  if (strlen(filename) == 0 || strcmp(filename, ".") == 0)
     inode = dir_get_inode(dir);
   else {
     dir_lookup(dir, filename, &inode);
@@ -99,7 +99,6 @@ struct file* filesys_open(const char* name) {
 
   if (inode == NULL || inode_is_removed(inode))
     return NULL;
-
   return file_open(inode);
 }
 
@@ -119,18 +118,21 @@ bool filesys_remove(const char* name) {
   struct thread* curr_thread = thread_current();
   struct dir* dirc = curr_thread->dir;
   bool is_parent = false;
-  while (!dir_is_root(dirc) && dirc != NULL) {
+
+  while (!dir_is_root(dirc) && dirc != NULL && strlen(filename) == 0) {
+    dirc = dir_parent(dirc);
     bool same = dir_is_same(dirc, dir);
     if (same) {
       is_parent = true;
       break;
     }
-    dirc = dir_parent(dirc);
   }
   if (dir_is_root(dir) && strlen(filename) == 0) {
     is_parent = true;
   }
+
   if (!is_parent) {
+
     bool success = split_success && (dir != NULL) && dir_remove(dir, filename);
     if (success)
       dir_close(dir);
@@ -142,13 +144,6 @@ bool filesys_remove(const char* name) {
 
 // ADDED
 bool filesys_chdir(const char* name) {
-  char directory[strlen(name) + 1];
-  char filename[NAME_MAX + 1];
-  directory[0] = '\0';
-  filename[0] = '\0';
-
-  split_directory_and_filename(name, directory, filename);
-
   struct dir* dir = dir_get_from_path(name);
   struct inode* inode = NULL;
 

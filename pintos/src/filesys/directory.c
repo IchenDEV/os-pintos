@@ -31,7 +31,7 @@ bool dir_create(block_sector_t sector, size_t entry_cnt) {
    it takes ownership.  Returns a null pointer on failure. */
 struct dir* dir_open(struct inode* inode) {
   struct dir* dir = calloc(1, sizeof *dir);
-    struct dir_entry e;
+  struct dir_entry e;
   if (inode != NULL && dir != NULL) {
     dir->inode = inode;
     dir->pos = sizeof e;
@@ -153,6 +153,7 @@ bool dir_add(struct dir* dir, const char* name, block_sector_t inode_sector, boo
     struct dir_entry parent;
     parent.inode_sector = inode_get_inumber(dir_get_inode(dir));
     parent.in_use = true;
+    strcpy(parent.name, "..");
     size_t rc = inode_write_at(child->inode, &parent, sizeof parent, 0);
     dir_close(child);
     if (rc != sizeof(parent))
@@ -180,7 +181,6 @@ bool dir_remove(struct dir* dir, const char* name) {
   off_t ofs;
   ASSERT(dir != NULL);
   ASSERT(name != NULL);
-
   /* Find directory entry. */
   if (!lookup(dir, name, &e, &ofs))
     goto done;
@@ -217,14 +217,12 @@ done:
    contains no more entries. */
 bool dir_readdir(struct dir* dir, char name[NAME_MAX + 1]) {
   struct dir_entry e;
-  if(dir->pos==0){
-    dir->pos=sizeof e;
+  if (dir->pos == 0) {
+    dir->pos = sizeof e;
   }
   for (; /* 0-pos is for parent directory */
        inode_read_at(dir->inode, &e, sizeof e, dir->pos) == sizeof e;) {
-    printf("rcdf%d\n",dir->pos);
-     dir->pos += sizeof e;
-        printf("[%s]rcdfv%d\n",e.name,dir->pos);
+    dir->pos += sizeof e;
     if (e.in_use) {
       strlcpy(name, e.name, NAME_MAX + 1);
       return true;
