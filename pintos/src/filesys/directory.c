@@ -153,7 +153,7 @@ bool dir_add(struct dir* dir, const char* name, block_sector_t inode_sector, boo
     struct dir_entry parent;
     parent.inode_sector = inode_get_inumber(dir_get_inode(dir));
     parent.in_use = true;
-    strcpy(parent.name, "..");
+    strlcpy(parent.name, "..", NAME_MAX + 1);
     size_t rc = inode_write_at(child->inode, &parent, sizeof parent, 0);
     dir_close(child);
     if (rc != sizeof(parent))

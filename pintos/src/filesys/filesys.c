@@ -50,7 +50,7 @@ bool filesys_create(const char* name, off_t initial_size, bool is_dir) {
   directory[0] = '\0';
   filename[0] = '\0';
 
-  bool split_success = split_directory_and_filename(name, directory, filename);
+  split_directory_and_filename(name, directory, filename);
   struct dir* dir = dir_get_from_path(directory);
 
   bool success = false;
@@ -146,7 +146,6 @@ bool filesys_remove(const char* name) {
 bool filesys_chdir(const char* name) {
   struct dir* dir = dir_get_from_path(name);
   struct inode* inode = NULL;
-
   if (dir == NULL) {
 
     return false;
@@ -230,6 +229,8 @@ int get_next_part(char part[NAME_MAX + 1], const char** srcp) {
 struct dir* dir_get_from_path(const char* directory) {
   struct thread* curr_thread = thread_current();
 
+  if (strcmp(directory, "..") == 0)
+    return dir_parent(curr_thread->dir);
   /* Absolute path */
   struct dir* curr_dir;
   if (directory[0] == '/' || curr_thread->dir == NULL)

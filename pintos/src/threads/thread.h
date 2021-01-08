@@ -121,12 +121,12 @@ struct thread {
   struct file* executable;
 
   struct thread* parent; //父进程
-  struct list children;//子进程
-  struct list files; //打开的文件
+  struct list children;  //子进程
+  struct list files;     //打开的文件
   struct semaphore exec_sema; //用于exec同步，只有当子进程load成功后，父进程才能从exec返回
   struct as_child_thread* pointer_as_child_thread;
 #endif
-  struct dir *dir;
+  struct dir* dir;
   int exit_status; //退出状态
   /* Owned by thread.c. */
 

@@ -2,6 +2,7 @@
 #define FILESYS_FILESYS_H
 
 #include <stdbool.h>
+#include "filesys/directory.h"
 #include "filesys/off_t.h"
 
 /* Sectors of system file inodes. */
@@ -13,12 +14,12 @@ struct block* fs_device;
 
 void filesys_init(bool format);
 void filesys_done(void);
-bool filesys_create(const char* name, off_t initial_size,bool);
+bool filesys_create(const char* name, off_t initial_size, bool);
 struct file* filesys_open(const char* name);
 bool filesys_remove(const char* name);
-bool filesys_chdir (const char *name);
+bool filesys_chdir(const char* name);
 
 struct dir* dir_get_from_path(const char* path_name);
-bool split_directory_and_filename(const char* path, char* directory, char* filename) ;
-
+bool split_directory_and_filename(const char* path, char* directory, char* filename);
+int get_next_part(char part[NAME_MAX + 1], const char** srcp);
 #endif /* filesys/filesys.h */
