@@ -620,16 +620,16 @@ int process_inumber(int fd) {
     release_file_lock();
     return si;
   }
-  return -1;
+  return false;
 }
 int process_readdir(int fd, char* name) {
 if (get_fd_entry(fd) != NULL) {
     acquire_file_lock();
-    int si = dir_readdir(file_get_inode(get_fd_entry(fd)->file),name);
+    bool si = dir_readdir((struct dir*)(get_fd_entry(fd)->file),name);
     release_file_lock();
     return si;
   }
-  return -1;
+  return false;
 }
 static int allocate_fd(void) { return thread_current()->next_fd++; }
 

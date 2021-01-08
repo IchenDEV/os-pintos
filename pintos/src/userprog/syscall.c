@@ -71,7 +71,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     return;
   }
   uint32_t* args = ((uint32_t*)f->esp);
-  if (args[0] >= 20) {
+  if (args[0] > 20) {
     kill_program();
     return;
   }

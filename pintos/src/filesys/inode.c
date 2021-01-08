@@ -1,5 +1,5 @@
 #include "filesys/inode.h"
-#include <list.h>
+
 #include <debug.h>
 #include <round.h>
 #include <string.h>
@@ -8,26 +8,11 @@
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
 #include "filesys/cache.h"
-#include "threads/synch.h"
+
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
-/* Block Sector Counts */
-#define DIRECT_BLOCK_COUNT 123
-#define INDIRECT_BLOCK_COUNT 128
 
-/* On-disk inode.
-   Must be exactly BLOCK_SECTOR_SIZE bytes long. */
-struct inode_disk
-  {
-    block_sector_t direct_blocks[DIRECT_BLOCK_COUNT];
-    block_sector_t indirect_block;
-    block_sector_t doubly_indirect_block;
-
-    bool is_dir;                        /* Indicator of directory file */
-    off_t length;                       /* File size in bytes. */
-    unsigned magic;                     /* Magic number. */
-  };
 
 /* Indirect-block structure */
 struct indirect_block_sector
@@ -50,16 +35,6 @@ min (size_t x, size_t y)
   return x < y ? x : y;
 }
 
-/* In-memory inode. */
-struct inode
-  {
-    struct list_elem elem;              /* Element in inode list. */
-    block_sector_t sector;              /* Sector number of disk location. */
-    int open_cnt;                       /* Number of openers. */
-    struct lock inode_lock;             /* Inode lock. */
-    bool removed;                       /* True if deleted, false otherwise. */
-    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-  };
 
 /* Functions replaced free_map_allocate () */
 static bool inode_allocate (struct inode_disk *disk_inode, off_t length);
@@ -268,6 +243,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 {
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
+  off_t offsetou=offset;
 
   while (size > 0)
     {
@@ -284,16 +260,13 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       int chunk_size = size < min_left ? size : min_left;
       if (chunk_size <= 0)
         break;
-
-      cache_read (fs_device, sector_idx, (void *)(buffer + bytes_read),
-                  sector_ofs, chunk_size);
-
+      cache_read (fs_device, sector_idx, (void *)(buffer + bytes_read),sector_ofs, chunk_size);
       /* Advance. */
       size -= chunk_size;
       offset += chunk_size;
       bytes_read += chunk_size;
     }
-
+    offset =offsetou;
   return bytes_read;
 }
 

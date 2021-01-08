@@ -174,7 +174,7 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   ASSERT(function != NULL);
 
 #ifdef USERPROG
-  if (list_size(&all_list) >= 35) /* Maximum threads */
+  if (list_size(&all_list) >= 34) /* Maximum threads */
     return TID_ERROR;
 #endif
 
