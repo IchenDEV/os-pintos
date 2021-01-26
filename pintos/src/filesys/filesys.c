@@ -142,12 +142,10 @@ bool filesys_remove(const char* name) {
   }
 }
 
-// ADDED
 bool filesys_chdir(const char* name) {
   struct dir* dir = dir_get_from_path(name);
   struct inode* inode = NULL;
   if (dir == NULL) {
-
     return false;
   } else {
     dir_close(thread_current()->dir);

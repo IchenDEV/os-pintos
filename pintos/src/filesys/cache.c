@@ -27,29 +27,12 @@ static struct lock cache_update_lock;
 /* Used to prevent flush on uninitialized cache if shutdown occurs before cache init. */
 static bool cache_initialized = false;
 
-/* Used for cache statistics. */
-static long long cache_hit_count;
-static long long cache_miss_count;
-static long long cache_access_count;
-
-static struct lock cache_hit_count_lock;
-static struct lock cache_miss_count_lock;
-static struct lock cache_access_count_lock;
-
 /* Initialize the cache. */
 void cache_init(void) {
   lock_init(&cache_update_lock);
-  lock_init(&cache_hit_count_lock);
-  lock_init(&cache_miss_count_lock);
-  lock_init(&cache_access_count_lock);
-
-  cache_hit_count = 0;
-  cache_miss_count = 0;
-  cache_access_count = 0;
 
   /* Initialize each cache block. */
-  int i;
-  for (i = 0; i < CACHE_NUM_ENTRIES; i++) {
+  for (int i = 0; i < CACHE_NUM_ENTRIES; i++) {
     cache[i].valid = false;
     lock_init(&cache[i].cache_block_lock);
   }
@@ -75,8 +58,7 @@ void cache_flush(struct block* fs_device) {
     return;
 
   /* Write each cache block to disk */
-  int i;
-  for (i = 0; i < CACHE_NUM_ENTRIES; i++) {
+  for (int i = 0; i < CACHE_NUM_ENTRIES; i++) {
     lock_acquire(&cache[i].cache_block_lock);
     if (cache[i].valid && cache[i].dirty)
       cache_flush_block_index(fs_device, i);
@@ -92,8 +74,7 @@ void cache_invalidate(struct block* fs_device) {
 
   lock_acquire(&cache_update_lock);
   /* Invalidate each cache entry. */
-  int i;
-  for (i = 0; i < CACHE_NUM_ENTRIES; i++) {
+  for (int i = 0; i < CACHE_NUM_ENTRIES; i++) {
     lock_acquire(&cache[i].cache_block_lock);
     if (cache[i].valid && cache[i].dirty)
       cache_flush_block_index(fs_device, i);
@@ -102,48 +83,6 @@ void cache_invalidate(struct block* fs_device) {
   }
   lock_release(&cache_update_lock);
 }
-
-/* Increment cache hit count. */
-static void cache_increment_hit_count(void) {
-  lock_acquire(&cache_hit_count_lock);
-  cache_hit_count++;
-  lock_release(&cache_hit_count_lock);
-}
-
-/* Increment cache miss count. */
-static void cache_increment_miss_count(void) {
-  lock_acquire(&cache_miss_count_lock);
-  cache_miss_count++;
-  lock_release(&cache_miss_count_lock);
-}
-
-/* Increment cache access count. */
-static void cache_increment_access_count(void) {
-  lock_acquire(&cache_access_count_lock);
-  cache_access_count++;
-  lock_release(&cache_access_count_lock);
-}
-
-/* Stores the cache statistics in the corresponding argument references. */
-int cache_get_stats(long long* access_count, long long* hit_count, long long* miss_count) {
-  if (access_count == NULL || hit_count == NULL || miss_count == NULL || !cache_initialized)
-    return -1;
-
-  lock_acquire(&cache_hit_count_lock);
-  lock_acquire(&cache_miss_count_lock);
-  lock_acquire(&cache_access_count_lock);
-
-  *access_count = cache_access_count;
-  *hit_count = cache_hit_count;
-  *miss_count = cache_miss_count;
-
-  lock_release(&cache_access_count_lock);
-  lock_release(&cache_miss_count_lock);
-  lock_release(&cache_hit_count_lock);
-
-  return 0;
-}
-
 /* Find a cache entry to evict and return its index. */
 static int cache_evict(struct block* fs_device, block_sector_t sector_index) {
   static size_t clock_position = 0;
@@ -197,7 +136,7 @@ static void cache_replace(struct block* fs_device, int index, block_sector_t sec
   ASSERT(cache[index].valid == false);
 
   /* Read in and write from device at disk_sector_index to data.
-     Optmization: do not read in from disk if writing a whole block. */
+     Optimization: do not read in from disk if writing a whole block. */
   if (!is_whole_block_write)
     block_read(fs_device, sector_index, cache[index].data);
 
@@ -210,34 +149,25 @@ static void cache_replace(struct block* fs_device, int index, block_sector_t sec
 /* Returns the index in the cache corresponding to the block holding sector_index. */
 static int cache_get_block_index(struct block* fs_device, block_sector_t sector_index,
                                  bool is_whole_block_write) {
-  cache_increment_access_count();
   /* Check if sector_index is in cache. */
   int i;
   for (i = 0; i < CACHE_NUM_ENTRIES; i++) {
     lock_acquire(&cache[i].cache_block_lock);
-    if (cache[i].valid && (cache[i].disk_sector_index == sector_index)) {
-      /* Cache hit. */
-      cache_increment_hit_count();
+    if (cache[i].valid && (cache[i].disk_sector_index == sector_index))
       break;
-    }
-
     lock_release(&cache[i].cache_block_lock);
   }
 
   /* Evict if sector_index is not in cache. */
   if (i == CACHE_NUM_ENTRIES) {
-    /* Cache miss.
-         cache_evict () acquires cache_block_lock at index i. */
+    /* Cache miss.cache_evict () acquires cache_block_lock at index i. */
     i = cache_evict(fs_device, sector_index);
-    if (i >= 0) {
+    if (i >= 0)
       /* Found a block to evict. */
-      cache_increment_miss_count();
       cache_replace(fs_device, i, sector_index, is_whole_block_write);
-    } else {
+    else
       /* Sector index was found in the cache so it was a cache hit. */
-      cache_increment_hit_count();
       i = -(i + 1);
-    }
   }
 
   ASSERT(lock_held_by_current_thread(&cache[i].cache_block_lock));

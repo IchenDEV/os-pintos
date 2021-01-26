@@ -21,7 +21,6 @@
 
 ## Task 2: Priority Scheduler
 
-线程调度
 因此在线程设置完优先级之后应该立刻重新调度，因此只需要在thread_set_priority()函数里添加thread_yield()函数即可。
 创建一个新的高优先级线程抢占当前线程，因此在thread_create中，如果新线程的优先级高于当前线程优先级，调用thread_yield()函数即可。
 修改sema_up在waiters中取出优先级最高的thread，并yield()即可即可，修改如下
@@ -36,9 +35,15 @@
 
 Priority的计算公式为：priority= PRI_MAX - (recent_cpu/ 4) - (nice*2)，每四个tick更新一次
 
-recent_cpu的计算公式为recent_cpu= (2*load_avg)/(2*load_avg+ 1) *recent_cpu+nice，当timer_ticks () % TIMER_FREQ == 0时对所有线程更新，每个tick对当前线程的recent_cpu加1。
+recent_cpu的计算公式为recent_cpu= (2*load_avg)/(2*load_avg+1) *recent_cpu+nice，当timer_ticks () % TIMER_FREQ == 0时对所有线程更新，每个tick对当前线程的recent_cpu加1。
 
 load_avg的计算公式为load_avg= (59/60)*load_avg+ (1/60)*ready_threads，当timer_ticks () % TIMER_FREQ == 0时对所有线程更新
+
+所以修改线程结构，在线程结构中添加变量：
+
+    fixed_point_t recent_cpu，初始化为0
+
+    int nice;
 
 接下来就是在每次中断时对这些值进行更新，修改timer.c文件,在`timer_interrupt`中加入对mlfqs相关值对计算，修改如下：
 
@@ -55,3 +60,10 @@ static void timer_interrupt(......) {
  .....
 }
 ```
+
+于是实现对应的计算函数，具体见代码，报告中略。
+
+### 同步
+
+所有计算和排序都在timer_interrupt()中完成，其中中断被禁用。所以，同步不是问题。
+
