@@ -365,8 +365,6 @@ void thread_set_priority(int new_priority) {
    thread_current ()->priority = new_priority;
    thread_yield();
    */
-
-  /* Solution Code */
   if (thread_mlfqs)
     return;
   enum intr_level old_level = intr_disable();

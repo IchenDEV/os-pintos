@@ -235,6 +235,15 @@ int process_write(int fd, const void* buffer, unsigned size) {
      list_remove(&fd_entry->elem);
 ```
 
+### 创建子线程限制
+
+设定最大的线程数，防止系统因为线程过多无法调度，同时满足multi-oom的测试需求。
+
+```c
+  if (list_size(&all_list) >= 34) /* Maximum threads */
+    return TID_ERROR;
+```
+
 ### 读写同步问题
 
 文件在执行一个文件操作的时候，例如在读取文件的时候不能写否则可能出现错误，简单起见应可视为一个原子操作，所以在每个对文件进行操作的函数加全局锁，可以基本上保证不会出现上述问题，解决一部分 rox 问题。
@@ -245,3 +254,8 @@ int process_write(int fd, const void* buffer, unsigned size) {
     int si = file_read(get_fd_entry(fd)->file, buffer, size);
     release_file_lock();
 ```
+
+### 越界问题
+
+当用户程序执行时候访问了不该访问的核心资源，应该kill，而不是让系统panic
+修改exception.c，在页错误添加对访问限制资源对handle即添加is_kernel_vaddr(fault_addr)，进行异常处理。
