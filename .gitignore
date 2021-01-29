@@ -5,3 +5,4 @@
 .DS_Store
 .vscode
 pintos/**/build
+/hw2/shell
