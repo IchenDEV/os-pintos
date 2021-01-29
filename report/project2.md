@@ -1,4 +1,4 @@
-# Project Threads
+# Final Report for Project 2: Threads
 
 ## Task 1: Efficient Alarm Clock
 
@@ -42,42 +42,7 @@
 
 通过检测被捐赠的线程是否已经获得了所需要的全部锁来判断是否出现嵌套捐赠的情况，如是则设置好参数来进行下一轮的优先级捐赠。
 
-#### 总结
-
-+ 没被捐赠过的，直接更新priority和original_priority两个变量
-+ 正在被捐赠需要改优先级的且新优先级被当前优先级更低，更新original_priority
-+ 正在被捐赠需要改优先级的且新优先级被当前优先级高，更新priority
-+ 取消捐赠状态，恢复成旧优先级，更新priority
-
-#### 释放互斥锁的操作
-
-+ 该线程已经没有锁了：恢复捐赠前的优先级
-+ 还有其它的锁：恢复成其它锁的最高优先级
-+ 因为最后的锁而没有锁了，恢复捐赠前的优先级
-
 ## Task3 实现多级反馈队列调度算法
-
-查阅资料发现目前pintos不支持浮点数运算，所以编写`fixed-point.h`，添加对浮点数运算对基本支持,实现最基本对加减乘除功能。
-
-该算法的优先级是动态变化的，主要动态修改`Niceness`, `Priority`, `recent_cpu`, `load_avg`
-
-Priority的计算公式为
-
-    priority= PRI_MAX - (recent_cpu/ 4) - (nice*2)
-
-每四个tick更新一次
-
-recent_cpu的计算公式为
-
-    recent_cpu= (2*load_avg)/(2*load_avg+1) *recent_cpu+nice
-
-当`timer_ticks () % TIMER_FREQ == 0`时对所有线程更新，每个tick对当前线程的recent_cpu加1。
-
-load_avg的计算公式为
-
-    load_avg= (59/60)*load_avg+ (1/60)*ready_threads
-
-当`timer_ticks () % TIMER_FREQ == 0`时对所有线程更新
 
 所以修改线程结构，在线程结构中添加变量：
 

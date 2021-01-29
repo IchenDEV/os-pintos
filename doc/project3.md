@@ -1,4 +1,4 @@
-# FileSystem
+# Design Document for Project 3: FileSystem
 
 ## Cache
 
@@ -25,25 +25,6 @@ void cache_write(...);//写缓存
 ### cache_replace
 
 当读、写不在cache内的扇区时，应该将内存中的进行替换，按照要求选用了Clock算法来确定要替换的扇区。
-Clock算法核心如下：
-
-```c
- /* Perform clock algorithm to find slot to evict. */
-  while (true) {
-    i = clock_position;
-    clock_position++;
-    clock_position %= CACHE_NUM_ENTRIES;
-
-    lock_acquire(&cache[i].cache_block_lock);
-
-    if (!cache[i].valid) {lock_release(&cache_update_lock);return i;}
-
-    if (cache[i].chances_remaining == 0)break;
-
-    cache[i].chances_remaining--;
-    lock_release(&cache[i].cache_block_lock);
-  }
-```
 
 ### 集成
 
@@ -102,17 +83,4 @@ Clock算法核心如下：
 
 ### readdir的实现
 
-dir作为特殊文件，需要使用特殊的方式read，读取目录文件块的每一个dir_entry中包含的名字即可，核心如下
-
-```c
-bool dir_readdir(...) {
-  struct dir_entry e;
-  if (dir->pos == 0) {dir->pos = sizeof e;}/* 0 is parent dir */
-  if (node_read_at(dir->inode, &e, sizeof e, dir->pos) == sizeof e) {
-    dir->pos += sizeof e;
-    strlcpy(name, e.name, NAME_MAX + 1);
-    return true;
-  }
-  return false;
-}
-```
+dir作为特殊文件，需要使用特殊的方式read，读取目录文件块的每一个dir_entry中包含的名字即可

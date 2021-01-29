@@ -1,20 +1,8 @@
-# Project User-Prog
+# Final Report for Project 1: User Programs
 
 ## Task 1: Argument Passing
 
-根据`4.1.6 Program Startup Details`，命令行 `/bin/ls -l foo bar`解析到内存空间为
-|地址|Name| Data | Type|
-|---|---|----|----|
-|...|...|...|...|
-|0xbfffffcc|argv[0][...]|/bin/ls\0|char[8]|
-|0xbfffffed|stack-align|0||
-|...|...|...|...|
-|0xbfffffd8|argv[0]|0xbfffffed||
-|0xbfffffd4|argv|0xbfffffd8||
-|0xbfffffd0|argc|4||
-|0xbfffffcc|return address|0||
-
-于是设计`extract_command_args`，`extract_command_name`调用`strtok_r`解析命令行参数，按照 8086 调用到约定将参数放入内存空间。核心代码如下：
+根据设计报告所描述，核心代码设计如下：
 
 ```c
     int n = argc - 1;
