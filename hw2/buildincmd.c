@@ -102,6 +102,6 @@ int cmd_kill(struct tokens *tokens)
   }
   char *pid = tokens_get_token(tokens, 2);
 
-  kill(SIGINT, atoi(pid));
+  kill(signum, atoi(pid));
   return 0;
 }
