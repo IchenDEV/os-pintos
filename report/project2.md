@@ -2,12 +2,11 @@
 
 ## Task 1: Efficient Alarm Clock
 
-看一下时钟的实现
+我们没有引入用于同步的新锁，而是使用了thread_block()/thread_unblock()。这简化了队列_睡眠列表函数。
 
-```C
-  while (timer_elapsed(start) < ticks)
-    thread_yield();
-```
+我们也没有在线程中添加新的list_elem，而是将原始elem用于sing_list。
+
+引入了一个比较器函数，用于从 sleeping_list 中移除线程。
 
 骨架代码中是一个循环不停检测是否可以执行否则 yield，显然效率不高，不妨利用中断完成。
 
@@ -22,9 +21,7 @@
 ## Task 2: Priority Scheduler
 
 因此在线程设置完优先级之后应该立刻重新调度，因此只需要在thread_set_priority()函数里添加thread_yield()函数即可。
-创建一个新的高优先级线程抢占当前线程，因此在thread_create中，如果新线程的优先级高于当前线程优先级，调用thread_yield()函数即可。
-修改sema_up在waiters中取出优先级最高的thread，并yield()即可即可。
-条件变量也维护了一个waiters用于存储等待接受条件变量的线程，那么就修改cond_signal（）函数唤醒优先级最高的线程即可。
+创建一个新的高优先级线程抢占当前线程，因此在thread_create中，如果新线程的优先级高于当前线程优先级，调用thread_yield()函数即可。修改sema_up在waiters中取出优先级最高的thread，并yield()即可即可。条件变量也维护了一个waiters用于存储等待接受条件变量的线程，那么就修改cond_signal（）函数唤醒优先级最高的线程即可。
 
 ### 捐赠优先级
 
@@ -67,8 +64,8 @@ static void timer_interrupt(......) {
 }
 ```
 
-于是实现对应的计算函数，具体见代码，报告中略。
+更新线程 MFLQS 优先级 void thread_update_mlfqs_priority(void); 更新每个线程优先级 = PRI_MAX - (recent_cpu / 4) - (nice * 2)
 
-### 同步
+Increment recent_cpu void increment_recent_cpu(void); 除非空闲线程正在运行，否则运行线程将 recent_cpu 增加 1。
 
-所有计算和排序都在timer_interrupt()中完成，其中中断被禁用。所以，同步不是问题。
+在thread_init（void）中添加初始化初始化的 initial_thread的 recent_cpu到0和nice到0，load_avg到0。在thread_create()中继承repres recent_cpu和nice。

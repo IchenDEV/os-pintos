@@ -13,6 +13,7 @@ struct build_in_function cmd_table[] = {
     {cmd_cd, "cd", "change dir of this shell"},
     {cmd_pwd, "pwd", "The pwd utility writes the absolute pathname of the current working directory to the standard output"},
     {cmd_kill, "kill", "kill"},
+    {cmd_wait, "wait", "wait"},
 };
 
 int exec_build_in_cmd(int function_index, struct tokens *tokens)
@@ -51,7 +52,12 @@ int cmd_cd(struct tokens *tokens)
   cmd_pwd(NULL);
   return 0;
 }
-
+int cmd_wait(unused struct tokens *tokens)
+{
+  int state;
+  wait(&state);
+  return 0;
+}
 int cmd_pwd(unused struct tokens *tokens)
 {
   char buffer[MAXPATH];

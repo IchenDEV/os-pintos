@@ -17,6 +17,7 @@ int cmd_help(struct tokens *tokens);
 int cmd_cd(struct tokens *tokens);
 int cmd_pwd(struct tokens *tokens);
 int cmd_kill(struct tokens *tokens);
+int cmd_wait(struct tokens *tokens);
 
 int lookup(char cmd[]);
 int exec_build_in_cmd(int function_index, struct tokens *tokens);
