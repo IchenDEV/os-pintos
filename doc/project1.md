@@ -2,6 +2,13 @@
 
 ## Task 1: Argument Passing
 
+### Data Structures and Functions
+
+### Algorithms
+
+### Synchronization
+
+### Rationale
 根据`4.1.6 Program Startup Details`，命令行 `/bin/ls -l foo bar`解析到内存空间为
 |地址|Name| Data | Type|
 |---|---|----|----|

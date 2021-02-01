@@ -11,6 +11,7 @@ struct build_in_function cmd_table[] = {
     {cmd_exit, "exit", "exit the command shell"},
     {cmd_cd, "cd", "change dir of this shell"},
     {cmd_pwd, "pwd", "The pwd utility writes the absolute pathname of the current working directory to the standard output"},
+    {cmd_kill, "kill", "kill"},
 };
 
 int exec_build_in_cmd(int function_index, struct tokens *tokens)
@@ -55,5 +56,51 @@ int cmd_pwd(unused struct tokens *tokens)
   char buffer[MAXPATH];
   getcwd(buffer, MAXPATH);
   printf("%s\n", buffer);
+  return 0;
+}
+
+/* change dir of this shell */
+int cmd_kill(struct tokens *tokens)
+{
+  char *Sig = tokens_get_token(tokens, 1);
+  if (Sig == NULL)
+    return -1;
+  Sig++;
+  int signum = 0;
+  if (strcmp(Sig, "TERM") == 0)
+  {
+    signum = SIGTERM;
+  }
+  else if (strcmp(Sig, "INT") == 0)
+  {
+    signum = SIGINT;
+  }
+  else if (strcmp(Sig, "QUIT") == 0)
+  {
+    signum = SIGQUIT;
+  }
+  else if (strcmp(Sig, "KILL") == 0)
+  {
+    signum = SIGKILL;
+  }
+  else if (strcmp(Sig, "TSTP") == 0)
+  {
+    signum = SIGTSTP;
+  }
+  else if (strcmp(Sig, "CONT") == 0)
+  {
+    signum = SIGCONT;
+  }
+  else if (strcmp(Sig, "TTIN") == 0)
+  {
+    signum = SIGTTIN;
+  }
+  else if (strcmp(Sig, "TTOU") == 0)
+  {
+    signum = SIGTTOU;
+  }
+  char *pid = tokens_get_token(tokens, 2);
+
+  kill(SIGINT, atoi(pid));
   return 0;
 }

@@ -12,7 +12,7 @@
 #include <unistd.h>
 #include "tokenizer.h"
 #include "buildincmd.h"
-#include "shell.h"
+#include "shell.h" 
 
 char *find_real_path(struct tokens *tokens)
 {
@@ -77,6 +77,8 @@ int exec_file(struct tokens *tokens)
       setpgid(getpid(), getpid());
       tcsetpgrp(shell_terminal, getpid());
     }
+    signal(SIGTTIN, SIG_DFL);
+    signal(SIGTTOU, SIG_DFL);
     execv(real_full_path, args);
     exit(-1);
   }
@@ -128,6 +130,7 @@ void init_shell()
     tcgetattr(shell_terminal, &shell_tmodes);
   }
   signal(SIGINT, sighandler);
+
   signal(SIGTTIN, SIG_IGN);
   signal(SIGTTOU, SIG_IGN);
 }
@@ -143,7 +146,7 @@ int main(unused int argc, unused char *argv[])
   if (shell_is_interactive)
     fprintf(stdout, "%d: ", line_num);
 
-  while (fgets(line, 4096, stdin))
+  while (fgets(line, 10240, stdin))
   {
     /* Split our line into words. */
     struct tokens *tokens = tokenize(line);
@@ -209,7 +212,7 @@ int main(unused int argc, unused char *argv[])
         }
         case 65280:
         {
-          printf("[%d]This shell doesn't know how to run %s\n", state, exec_cmd);
+          printf("[%d] This shell doesn't know how to run %s\n", state, exec_cmd);
         }
         }
       }
