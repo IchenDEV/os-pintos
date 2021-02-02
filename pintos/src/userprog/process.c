@@ -93,6 +93,7 @@ static void start_process(void* file_name_) {
   if (!success)
     thread_exit(-1);
 
+  ASSERT((unsigned int)if_.esp % 16 == 0xc);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -492,7 +493,7 @@ static bool setup_stack(void** esp, char** argv, int argc) {
       address[n--] = *(char**)esp;
     }
 
-    while ((unsigned int)(*esp - (argc + 4) * sizeof(char*)) % 16!=0xc)
+    while ((unsigned int)(*esp - (argc + 4) * sizeof(char*)) % 16 != 0xc)
       *esp = *esp - 1;
 
     argv[argc] = 0;
@@ -513,7 +514,6 @@ static bool setup_stack(void** esp, char** argv, int argc) {
     memcpy(*esp, &argc, sizeof(char**));
 
     *esp = *esp - sizeof(char**);
-   
   }
 
   return success;
