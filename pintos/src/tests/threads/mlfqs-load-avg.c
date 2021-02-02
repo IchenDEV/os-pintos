@@ -137,7 +137,7 @@ void test_mlfqs_load_avg(void) {
   msg("Starting threads took %d seconds.", timer_elapsed(start_time) / TIMER_FREQ);
   thread_set_nice(-20);
 
-  for (i = 0; i < 90; i++) {
+  for (i = 0; i < 45; i++) {
     int64_t sleep_until = start_time + TIMER_FREQ * (2 * i + 10);
     int load_avg;
     timer_sleep(sleep_until - timer_ticks());

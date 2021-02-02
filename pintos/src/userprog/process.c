@@ -492,27 +492,28 @@ static bool setup_stack(void** esp, char** argv, int argc) {
       address[n--] = *(char**)esp;
     }
 
-    while ((int)(*esp - (argc + 3) * 4) % 16)
+    while ((unsigned int)(*esp - (argc + 4) * sizeof(char*)) % 16!=0xc)
       *esp = *esp - 1;
 
     argv[argc] = 0;
-    *esp = *esp - 4;
+    *esp = *esp - sizeof(char*);
     memcpy(*esp, &argv[argc], sizeof(char*));
 
     int t = argc - 1;
     while (t >= 0) {
-      *esp = *esp - 4;
+      *esp = *esp - sizeof(char**);
       memcpy(*esp, &address[t--], sizeof(char**));
     }
 
     void* argv0 = *esp;
-    *esp = *esp - 4;
+    *esp = *esp - sizeof(char**);
     memcpy(*esp, &argv0, sizeof(char**));
 
-    *esp = *esp - 4;
-    memcpy(*esp, &argc, sizeof(int));
+    *esp = *esp - sizeof(char**);
+    memcpy(*esp, &argc, sizeof(char**));
 
-    *esp = *esp - 4;
+    *esp = *esp - sizeof(char**);
+   
   }
 
   return success;

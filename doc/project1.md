@@ -64,7 +64,7 @@ static void extract_command_args(char* cmd_string, char* argv[], int* argc) {
 |地址|Name| Data | Type|
 |---|---|----|----|
 |...|...|...|...|
-|0xbfffffcc|argv[0][...]|/bin/ls\0|char[8]|
+|0xbffffffc|argv[0][...]|/bin/ls\0|char[8]|
 |0xbfffffed|stack-align|0||
 |...|...|...|...|
 |0xbfffffd8|argv[0]|0xbfffffed||
