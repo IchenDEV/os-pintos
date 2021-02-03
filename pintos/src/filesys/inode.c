@@ -20,25 +20,16 @@ struct indirect_block_sector {
 /* Returns the number of sectors to allocate for an inode SIZE
    bytes long. */
 static inline size_t bytes_to_sectors(off_t size) { return DIV_ROUND_UP(size, BLOCK_SECTOR_SIZE); }
-
-/* Min function */
 static inline size_t min(size_t x, size_t y) { return x < y ? x : y; }
-
-/* Functions replaced free_map_allocate () */
 static bool inode_allocate(struct inode_disk* disk_inode, off_t length);
 static bool inode_allocate_sector(block_sector_t* sector_num);
 static bool inode_allocate_indirect(block_sector_t* sector_num, size_t cnt);
 static bool inode_allocate_doubly_indirect(block_sector_t* sector_num, size_t cnt);
-
-/* Functions replaced free_map_release () */
 static void inode_deallocate(struct inode* inode);
 static void inode_deallocate_indirect(block_sector_t sector_num, size_t cnt);
 static void inode_deallocate_doubly_indirect(block_sector_t sector_num, size_t cnt);
 
-/* Returns the block device sector that contains byte offset POS
-   within INODE.
-   Returns -1 if INODE does not contain data for a byte at offset
-   POS. */
+/* Returns the block device sector  */
 static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   ASSERT(inode != NULL);
   block_sector_t sector = -1;
@@ -47,29 +38,27 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   if (pos < disk_inode->length) {
     off_t index = pos / BLOCK_SECTOR_SIZE;
 
-    /* direct block */
+    /* direct*/
     if (index < DIRECT_BLOCK_COUNT)
       sector = disk_inode->direct_blocks[index];
-    /* indirect block */
+    /* indirect*/
     else if (index < DIRECT_BLOCK_COUNT + INDIRECT_BLOCK_COUNT) {
-      /* remove direct block bias */
+
       index -= DIRECT_BLOCK_COUNT;
 
       struct indirect_block_sector indirect_block;
       cache_read(fs_device, disk_inode->indirect_block, &indirect_block, 0, BLOCK_SECTOR_SIZE);
       sector = indirect_block.block[index];
     }
-    /* doubly indirect block */
+    /* doubly indirect*/
     else {
-      /* remove direct and indirect block bias */
       index -= (DIRECT_BLOCK_COUNT + INDIRECT_BLOCK_COUNT);
       struct indirect_block_sector indirect_block;
 
-      /* get doubly indirect and indirect block index */
+      /* get doubly indirect */
       int did_index = index / INDIRECT_BLOCK_COUNT;
       int id_index = index % INDIRECT_BLOCK_COUNT;
 
-      /* Read doubly indirect block, then indirect block */
       cache_read(fs_device, disk_inode->doubly_indirect_block, &indirect_block, 0,
                  BLOCK_SECTOR_SIZE);
       cache_read(fs_device, indirect_block.block[did_index], &indirect_block, 0, BLOCK_SECTOR_SIZE);
@@ -170,10 +159,7 @@ void inode_close(struct inode* inode) {
 
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0) {
-    /* Remove from inode list and release lock. */
     list_remove(&inode->elem);
-
-    /* Deallocate blocks if removed. */
     if (inode->removed) {
       free_map_release(inode->sector, 1);
       inode_deallocate(inode);
@@ -330,8 +316,6 @@ static bool inode_allocate(struct inode_disk* disk_inode, off_t length) {
   ASSERT(disk_inode != NULL);
   if (length < 0)
     return false;
-
-  /* Get number of sectors needed */
   size_t i, j, num_sectors = bytes_to_sectors(length);
 
   /* Allocate Direct Blocks */
@@ -351,15 +335,13 @@ static bool inode_allocate(struct inode_disk* disk_inode, off_t length) {
   if (num_sectors == 0)
     return true;
 
-  /* Allocate Doubly-Indirect Block */
+  /* Allocate D Block */
   j = min(num_sectors, INDIRECT_BLOCK_COUNT * INDIRECT_BLOCK_COUNT);
   if (!inode_allocate_doubly_indirect(&disk_inode->doubly_indirect_block, j))
     return false;
   num_sectors -= j;
   if (num_sectors == 0)
     return true;
-
-  /* Shouldn't go past this point */
   ASSERT(num_sectors == 0);
   return false;
 }

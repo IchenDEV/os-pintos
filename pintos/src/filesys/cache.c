@@ -15,7 +15,7 @@ struct cache_block {
 
   bool valid;
   bool dirty;
-  size_t chances_remaining;
+  size_t chances;
 };
 
 /* Array of cache entries. */
@@ -41,10 +41,6 @@ void cache_init(void) {
 
 /* Writes the block at index to disk. */
 static void cache_flush_block_index(struct block* fs_device, int index) {
-  ASSERT(lock_held_by_current_thread(&cache[index].cache_block_lock));
-  ASSERT(cache[index].valid == true && cache[index].dirty == true);
-
-  /* Write from data to device at disk_sector_index. */
   block_write(fs_device, cache[index].disk_sector_index, cache[index].data);
   cache[index].dirty = false;
 }
@@ -52,7 +48,6 @@ static void cache_flush_block_index(struct block* fs_device, int index) {
 /* Write entire cache to disk. */
 void cache_flush(struct block* fs_device) {
   ASSERT(fs_device != NULL);
-
   /* Cache was not initialized and contains garbage so don't flush. */
   if (!cache_initialized)
     return;
@@ -83,7 +78,7 @@ void cache_invalidate(struct block* fs_device) {
   }
   lock_release(&cache_update_lock);
 }
-/* Find a cache entry to evict and return its index. */
+/* Find a cache entry to evict */
 static int cache_evict(struct block* fs_device, block_sector_t sector_index) {
   static size_t clock_position = 0;
   lock_acquire(&cache_update_lock);
@@ -99,7 +94,7 @@ static int cache_evict(struct block* fs_device, block_sector_t sector_index) {
     lock_release(&cache[i].cache_block_lock);
   }
 
-  /* Perform clock algorithm to find slot to evict. */
+  /*  clock algorithm */
   while (true) {
     i = clock_position;
     clock_position++;
@@ -112,15 +107,12 @@ static int cache_evict(struct block* fs_device, block_sector_t sector_index) {
       return i;
     }
 
-    if (cache[i].chances_remaining == 0)
+    if (cache[i].chances == 0)
       break;
 
-    cache[i].chances_remaining--;
+    cache[i].chances--;
     lock_release(&cache[i].cache_block_lock);
   }
-
-  /* Cache entry is valid if it got to this point. */
-
   lock_release(&cache_update_lock);
   /* Write dirty block back to disk. */
   if (cache[i].dirty)
@@ -129,24 +121,19 @@ static int cache_evict(struct block* fs_device, block_sector_t sector_index) {
   return i;
 }
 
-/* Replace the cache entry at index to contain data from sector_index. */
+/* Replace the cache  sector_index. */
 static void cache_replace(struct block* fs_device, int index, block_sector_t sector_index,
                           bool is_whole_block_write) {
-  ASSERT(lock_held_by_current_thread(&cache[index].cache_block_lock));
-  ASSERT(cache[index].valid == false);
-
-  /* Read in and write from device at disk_sector_index to data.
-     Optimization: do not read in from disk if writing a whole block. */
   if (!is_whole_block_write)
     block_read(fs_device, sector_index, cache[index].data);
 
   cache[index].valid = true;
   cache[index].dirty = false;
   cache[index].disk_sector_index = sector_index;
-  cache[index].chances_remaining = CACHE_NUM_CHANCES;
+  cache[index].chances = CACHE_NUM_CHANCES;
 }
 
-/* Returns the index in the cache corresponding to the block holding sector_index. */
+/* sector_index. */
 static int cache_get_block_index(struct block* fs_device, block_sector_t sector_index,
                                  bool is_whole_block_write) {
   /* Check if sector_index is in cache. */
@@ -160,61 +147,44 @@ static int cache_get_block_index(struct block* fs_device, block_sector_t sector_
 
   /* Evict if sector_index is not in cache. */
   if (i == CACHE_NUM_ENTRIES) {
-    /* Cache miss.cache_evict () acquires cache_block_lock at index i. */
     i = cache_evict(fs_device, sector_index);
     if (i >= 0)
-      /* Found a block to evict. */
       cache_replace(fs_device, i, sector_index, is_whole_block_write);
     else
-      /* Sector index was found in the cache so it was a cache hit. */
       i = -(i + 1);
   }
-
-  ASSERT(lock_held_by_current_thread(&cache[i].cache_block_lock));
   return i;
 }
 
-/* Read chunk_size bytes of data from cache starting from sector_index at position offest,
-   into destination. */
+/* Read . */
 void cache_read(struct block* fs_device, block_sector_t sector_index, void* destination,
                 off_t offset, int chunk_size) {
   ASSERT(fs_device != NULL);
   ASSERT(cache_initialized == true);
-  ASSERT(offset >= 0 && chunk_size >= 0);
-  ASSERT((offset + chunk_size) <= BLOCK_SECTOR_SIZE);
 
   /* cache_get_block_index () acquires cache_block_lock at index i. */
   int i = cache_get_block_index(fs_device, sector_index, false);
-
-  ASSERT(lock_held_by_current_thread(&cache[i].cache_block_lock));
   ASSERT(cache[i].valid == true);
 
   memcpy(destination, cache[i].data + offset, chunk_size);
-  cache[i].chances_remaining = CACHE_NUM_CHANCES;
+  cache[i].chances = CACHE_NUM_CHANCES;
   lock_release(&cache[i].cache_block_lock);
 }
 
-/* Write chunk_size bytes of data into cache starting from sector_index at position offest,
-   from source. */
+/* Write . */
 void cache_write(struct block* fs_device, block_sector_t sector_index, void* source, off_t offset,
                  int chunk_size) {
   ASSERT(fs_device != NULL);
   ASSERT(cache_initialized == true);
-  ASSERT(offset >= 0 && chunk_size >= 0);
-  ASSERT((offset + chunk_size) <= BLOCK_SECTOR_SIZE);
-
-  /* cache_get_block_index () acquires cache_block_lock at index i. */
   int i;
   if (chunk_size == BLOCK_SECTOR_SIZE)
     i = cache_get_block_index(fs_device, sector_index, true);
   else
     i = cache_get_block_index(fs_device, sector_index, false);
-
-  ASSERT(lock_held_by_current_thread(&cache[i].cache_block_lock));
   ASSERT(cache[i].valid == true);
 
   memcpy(cache[i].data + offset, source, chunk_size);
   cache[i].dirty = true;
-  cache[i].chances_remaining = CACHE_NUM_CHANCES;
+  cache[i].chances = CACHE_NUM_CHANCES;
   lock_release(&cache[i].cache_block_lock);
 }
