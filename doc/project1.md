@@ -111,8 +111,6 @@ strtok_r()的使用通过将每个参数按空格标记并添加NULL终止符来
     thread_exit(status);
 ```
 
-#### process_execute的修改
-
 #### System Call: pid t exec (const char \*cmd line)
 
 exec 就要新建立一个进程，显然要调用`process_execute`，并且需要一个 list 来存储子进程，让父进程可以管理子进程。于是设计以下字段来保存信息

@@ -93,7 +93,7 @@ static void start_process(void* file_name_) {
   if (!success)
     thread_exit(-1);
 
-  ASSERT((unsigned int)if_.esp % 16 == 0xc);
+  //ASSERT((unsigned int)if_.esp % 16 == 0xc);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -493,7 +493,7 @@ static bool setup_stack(void** esp, char** argv, int argc) {
       address[n--] = *(char**)esp;
     }
 
-    while ((unsigned int)(*esp - (argc + 4) * sizeof(char*)) % 16 != 0xc)
+    while ((unsigned int)(*esp - (argc + 4) * sizeof(char*)) % 16 != 0x0)
       *esp = *esp - 1;
 
     argv[argc] = 0;
@@ -579,7 +579,6 @@ int process_write(int fd, const void* buffer, unsigned size) {
     if (inode_is_dir(file_get_inode(get_fd_entry(fd)->file)))
       return -1; // ADDED: cannot write to dir
     acquire_file_lock();
-
     int si = file_write(get_fd_entry(fd)->file, buffer, size);
     release_file_lock();
     return si;
