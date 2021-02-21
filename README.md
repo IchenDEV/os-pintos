@@ -1,4 +1,4 @@
-CS 162 Group Repository
+PintOS Development
 =======================
 
 This repository contains code for CS 162 group projects.
@@ -14,3 +14,5 @@ This repository contains code for CS 162 group projects.
 * [Project 1: User Programs](report/project1.md)
 * [Project 2: Threads](report/project2.md)
 * [Project 3: File System](report/project3.md)
+
+**With all test passed** 
